@@ -1,0 +1,355 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id             String                   @id @default(uuid())
+  slug           String                   @unique
+  title          String
+  mainImage      String
+  price          Int                      @default(0)
+  rating         Int                      @default(0)
+  description    String
+  manufacturer   String
+  inStock        Int                      @default(1)
+  status         String                   @default("DRAFT")  // DRAFT, PUBLISHED, ARCHIVED
+  categoryId     String
+  category       Category                 @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  Wishlist       Wishlist[]
+  reviews        Review[]
+  subOrderProducts SubOrderProduct[]
+
+  merchantId     String
+  merchant       Merchant @relation(fields: [merchantId], references: [id])
+  bulkUploadItems bulk_upload_item[]      @relation("ProductBulkItems")
+}
+
+model Image {
+  imageID   String @id @default(uuid())
+  productID String
+  image     String
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String?
+  role          String?        @default("user")
+  Wishlist      Wishlist[]
+  notifications Notification[]
+  reviews       Review[]
+  voucherUsages VoucherUsage[]
+  // Back relation for bulk upload batches
+  bulkUploadBatches bulk_upload_batch[] @relation("UserBatches")
+}
+
+model Customer_order {
+  id          String                   @id @default(uuid())
+  name        String
+  lastname    String
+  phone       String
+  email       String
+  company     String
+  adress      String
+  apartment   String
+  postalCode  String
+  dateTime    DateTime?                @default(now())
+  status      String                   @default("PENDING")
+  city        String
+  country     String
+  orderNotice String?
+  total       Int
+  subOrders   SubOrder[]
+  payments    Payment[]
+}
+
+model Category {
+  id       String    @id @default(uuid())
+  name     String    @unique
+  products Product[] // Define a one-to-many relationship
+}
+
+model Wishlist {
+  id        String  @id @default(uuid())
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+}
+
+enum NotificationType {
+  ORDER_UPDATE
+  PAYMENT_STATUS
+  PROMOTION
+  SYSTEM_ALERT
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model Notification {
+  id        String               @id @default(uuid())
+  userId    String
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String               @db.Text
+  type      NotificationType
+  isRead    Boolean              @default(false)
+  priority  NotificationPriority @default(NORMAL)
+  metadata  Json?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([userId, type])
+  @@index([createdAt])
+}
+model Merchant {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  email       String?
+  phone       String?
+  address     String?
+  status      String   @default("ACTIVE")
+  shippingFee Int      @default(0)  // 固定运费（单位：分）
+  avatar      String?  // 商户头像
+  banner      String?  // 店铺横幅
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关系
+  products    Product[]
+  subOrders   SubOrder[]
+  vouchers    Voucher[]
+  reviews     Review[]
+}
+
+// ============================================
+// 多商户订单子订单模型 (SubOrder)
+// ============================================
+model SubOrder {
+  id               String               @id @default(uuid())
+  parentOrderId    String
+  parentOrder      Customer_order       @relation(fields: [parentOrderId], references: [id], onDelete: Cascade)
+  merchantId       String
+  merchant         Merchant             @relation(fields: [merchantId], references: [id])
+  status           String               @default("PENDING")  // PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED
+  subTotal         Int                  @default(0)         // 子订单小计
+  shippingTotal    Int                  @default(0)         // 运费
+  trackingNumber   String?
+  shippingProvider String?
+  shippedAt        DateTime?
+  deliveredAt      DateTime?
+  confirmedAt      DateTime?
+  cancelledAt      DateTime?
+  cancelReason     String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  // 关联订单产品
+  products         SubOrderProduct[]
+
+  @@index([parentOrderId])
+  @@index([merchantId])
+  @@index([status])
+}
+
+// ============================================
+// 订单产品关联表 (带快照) - 关联 SubOrder
+// ============================================
+model SubOrderProduct {
+  id                    String   @id @default(uuid())
+  subOrderId            String
+  subOrder              SubOrder @relation(fields: [subOrderId], references: [id], onDelete: Cascade)
+  productId             String
+  product               Product  @relation(fields: [productId], references: [id])
+  quantity              Int
+
+  // 快照字段 - 保留下单时的商品信息，确保历史订单数据准确
+  productNameSnapshot   String
+  productImageSnapshot  String?
+  unitPriceSnapshot     Int      // 下单时的单价
+  merchantIdSnapshot    String
+  merchantNameSnapshot  String
+
+  @@index([subOrderId])
+  @@index([productId])
+}
+
+// ============================================
+// 产品评价系统 (Review)
+// ============================================
+model Review {
+  id         String   @id @default(uuid())
+  rating     Int      // 1-5 星
+  comment    String?  @db.Text
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+  orderId    String?  // 关联的订单ID
+  status     String   @default("PUBLISHED")  // PUBLISHED, HIDDEN, FLAGGED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([productId])
+  @@index([merchantId])
+  @@index([userId])
+  @@index([rating])
+}
+
+// ============================================
+// 优惠券系统 (Voucher)
+// ============================================
+model Voucher {
+  id            String    @id @default(uuid())
+  code          String    @unique
+  title         String    // 优惠券标题
+  description   String?   @db.Text
+  discountType  String    // PERCENTAGE (百分比), FIXED (固定金额)
+  discountValue Int       // 折扣值（百分比为1-100，固定金额为分）
+  merchantId    String?   // null表示平台优惠券，非null表示商户专属
+  merchant      Merchant? @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+  minOrderValue Int?      // 最低订单金额要求（分）
+  maxDiscount   Int?      // 最高折扣金额（分），仅百分比类型使用
+  usageLimit    Int?      // 总使用次数限制
+  usedCount     Int       @default(0)  // 已使用次数
+  perUserLimit  Int       @default(1) // 每人限用次数
+  startsAt      DateTime  @default(now())
+  expiresAt     DateTime
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  usages        VoucherUsage[]
+
+  @@index([code])
+  @@index([merchantId])
+  @@index([isActive])
+  @@index([expiresAt])
+}
+
+// ============================================
+// 优惠券使用记录
+// ============================================
+model VoucherUsage {
+  id         String   @id @default(uuid())
+  voucherId  String
+  voucher    Voucher  @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId    String?  // 使用的订单ID
+  usedAt     DateTime @default(now())
+
+  @@index([voucherId])
+  @@index([userId])
+}
+
+// ============================================
+// 支付记录 (Payment)
+// ============================================
+model Payment {
+  id              String   @id @default(uuid())
+  orderId         String
+  order           Customer_order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount          Int      // 支付金额（分）
+  currency        String   @default("USD")
+  method          String?  // CARD, BANK_TRANSFER, COD (货到付款)
+  status          String   @default("PENDING")  // PENDING, COMPLETED, FAILED, REFUNDED, PARTIALLY_REFUNDED
+  transactionId   String?  // 第三方支付交易ID
+  gatewayResponse Json?    // 支付网关返回的原始数据
+  paidAt          DateTime?
+  refundedAt      DateTime?
+  refundAmount     Int?     // 退款金额（分）
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+  @@index([transactionId])
+}
+
+// ============================================
+// 商户结算/账本 (MerchantPayout)
+// ============================================
+model MerchantPayout {
+  id           String   @id @default(uuid())
+  merchantId   String
+  amount       Int      // 结算金额（分）
+  status       String   @default("PENDING")  // PENDING, PROCESSING, COMPLETED, FAILED
+  period       String?  // 结算周期描述 e.g. "2024-01"
+  note         String?
+  createdAt    DateTime @default(now())
+  processedAt  DateTime?
+
+  @@index([merchantId])
+  @@index([status])
+}
+
+model bulk_upload_batch {
+  id         String              @id @default(uuid())
+  fileName   String?
+  createdAt  DateTime            @default(now())
+  status     BulkUploadStatus    @default(PENDING)
+  itemCount  Int                 @default(0)
+  errorCount Int                 @default(0)
+  items      bulk_upload_item[]
+
+  // optional uploader link if you later associate sessions/users
+  userId String?
+  user   User?                  @relation(name: "UserBatches", fields: [userId], references: [id])
+}
+
+model bulk_upload_item {
+  id        String            @id @default(uuid())
+  batchId   String
+  batch     bulk_upload_batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  // created product reference
+  productId String?
+  product   Product?          @relation(name: "ProductBulkItems", fields: [productId], references: [id], onDelete: SetNull)
+
+  // snapshot fields for auditing and re-commit edits
+  title         String
+  slug          String
+  price         Int
+  manufacturer  String?
+  description   String?
+  mainImage     String?
+  categoryId    String
+  inStock       Int
+
+  status        BulkUploadItemStatus @default(CREATED)
+  error         String?
+}
+
+enum BulkUploadStatus {
+  PENDING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum BulkUploadItemStatus {
+  CREATED
+  UPDATED
+  ERROR
+}
