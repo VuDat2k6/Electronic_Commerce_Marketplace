@@ -3,10 +3,16 @@
 import apiClient from "@/lib/api";
 import { revalidateTag } from "next/cache";
 
-export async function deleteWishItem(id: string){
-  apiClient.delete(`/api/wishlist/${id}`, {
+export async function deleteWishItem(id: string) {
+  const response = await apiClient.delete(`/api/wishlist/${id}`, {
     method: "DELETE",
   });
+
+  if (!response.ok) {
+    throw new Error("Failed to delete wishlist item");
+  }
+
+  revalidateTag("wishlist");
 }
 
 

@@ -1,7 +1,7 @@
 // *********************
 // Role of the component: Simple H2 heading component
 // Name of the component: Heading.tsx
-// Developer: Aleksandar Kuzmanovic
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <Heading title={title} />
 // Input parameters: { title: string }

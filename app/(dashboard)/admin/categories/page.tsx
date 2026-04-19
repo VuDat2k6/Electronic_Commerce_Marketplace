@@ -6,18 +6,33 @@ import React, { useEffect, useState } from "react";
 import { formatCategoryName } from "../../../../utils/categoryFormating";
 import apiClient from "@/lib/api";
 
+interface Category {
+  id?: string | number;
+  name?: string;
+}
+
 const DashboardCategory = () => {
   const [categories, setCategories] = useState<Category[]>([]);
 
   // getting all categories to be displayed on the all categories page
   useEffect(() => {
-    apiClient.get("/api/categories")
-      .then((res) => {
-        return res.json();
-      })
-      .then((data) => {
-        setCategories(data);
-      });
+    const fetchCategories = async () => {
+      try {
+        const res = await apiClient.get("/api/categories");
+
+        if (!res.ok) {
+          throw new Error("Failed to fetch categories");
+        }
+
+        const data = await res.json();
+        setCategories(data || []);
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+        setCategories([]);
+      }
+    };
+
+    fetchCategories();
   }, []);
 
   return (

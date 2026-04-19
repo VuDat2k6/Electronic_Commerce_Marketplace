@@ -29,19 +29,20 @@ const DashboardSingleUserPage = ({ params }: DashboardUserDetailsProps) => {
     const requestOptions = {
       method: "DELETE",
     };
-    apiClient
-      .delete(`/api/users/${id}`, requestOptions)
-      .then((response) => {
-        if (response.status === 204) {
-          toast.success("User deleted successfully");
-          router.push("/admin/users");
-        } else {
-          throw Error("There was an error while deleting user");
-        }
-      })
-      .catch((error) => {
-        toast.error("There was an error while deleting user");
-      });
+
+    try {
+      const response = await apiClient.delete(`/api/users/${id}`, requestOptions);
+
+      if (response.status === 204) {
+        toast.success("User deleted successfully");
+        router.push("/admin/users");
+      } else {
+        throw Error("There was an error while deleting user");
+      }
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      toast.error("There was an error while deleting user");
+    }
   };
 
   const updateUser = async () => {
@@ -86,18 +87,27 @@ const DashboardSingleUserPage = ({ params }: DashboardUserDetailsProps) => {
 
   useEffect(() => {
     // sending API request for a single user
-    apiClient
-      .get(`/api/users/${id}`)
-      .then((res) => {
-        return res.json();
-      })
-      .then((data) => {
+    const fetchUser = async () => {
+      try {
+        const res = await apiClient.get(`/api/users/${id}`);
+
+        if (!res.ok) {
+          throw new Error("Failed to fetch user");
+        }
+
+        const data = await res.json();
         setUserInput({
-          email: data?.email,
+          email: data?.email || "",
           newPassword: "",
-          role: data?.role,
+          role: data?.role || "",
         });
-      });
+      } catch (error) {
+        console.error("Error fetching user:", error);
+        toast.error("There was an error while loading user data");
+      }
+    };
+
+    fetchUser();
   }, [id]);
 
   return (

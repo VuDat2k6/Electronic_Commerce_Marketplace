@@ -1,14 +1,48 @@
+/**
+ * Review Controller
+ * 
+ * Handles product review and rating management:
+ * - Creating reviews for purchased products
+ * - Fetching reviews by product, merchant, or user
+ * - Deleting/hiding reviews (soft delete)
+ * - Calculating and updating product average ratings
+ * - Review statistics and distribution
+ * 
+ * Reviews help customers make informed purchase decisions
+ * and provide feedback to merchants about their products.
+ * 
+ * @module controllers/review
+ */
+
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
-// ============================================
-// 创建评价
-// ============================================
+// ============================================================
+// CREATE REVIEW
+// Creates a new product review after validation
+// ============================================================
+
+/**
+ * POST /api/reviews
+ * 
+ * Creates a new review for a product
+ * Validates rating, prevents duplicate reviews, updates product rating
+ * 
+ * Request Body:
+ * - rating: 1-5 star rating (required)
+ * - comment: Review text (optional)
+ * - productId: Product ID (required)
+ * - userId: User ID (required)
+ * - orderId: Associated order ID (optional)
+ * 
+ * @param {Request} request - Express request with review data
+ * @param {Response} response - Express response object
+ */
 async function createReview(request, response) {
   try {
     const { rating, comment, productId, userId, orderId } = request.body;
 
-    // 校验必填字段
+    // Validate rating is between 1 and 5
     if (!rating || rating < 1 || rating > 5) {
       return response.status(400).json({
         error: "Validation failed",
@@ -28,7 +62,7 @@ async function createReview(request, response) {
       });
     }
 
-    // 查找商品，获取商户ID
+    // Find product to get merchant ID for the review
     const product = await prisma.product.findUnique({
       where: { id: productId },
       select: { id: true, merchantId: true, title: true },
@@ -38,7 +72,8 @@ async function createReview(request, response) {
       return response.status(404).json({ error: "Product not found" });
     }
 
-    // 检查用户是否已评价过该商品（同一订单）
+    // Check if user has already reviewed this product for the same order
+    // Prevents spam reviews
     const existingReview = await prisma.review.findFirst({
       where: {
         productId,
@@ -54,7 +89,7 @@ async function createReview(request, response) {
       });
     }
 
-    // 创建评价
+    // Create the review
     const review = await prisma.review.create({
       data: {
         rating: parseInt(rating),
@@ -71,7 +106,7 @@ async function createReview(request, response) {
       },
     });
 
-    // 更新产品的平均评分
+    // Update the product's average rating
     await recalculateProductRating(productId);
 
     return response.status(201).json(review);
@@ -81,9 +116,24 @@ async function createReview(request, response) {
   }
 }
 
-// ============================================
-// 获取商品的所有评价
-// ============================================
+// ============================================================
+// GET PRODUCT REVIEWS
+// Retrieves all reviews for a specific product with pagination
+// ============================================================
+
+/**
+ * GET /api/reviews/product/:productId
+ * 
+ * Retrieves all published reviews for a product
+ * Includes pagination and review statistics
+ * 
+ * Query Parameters:
+ * - page: Page number (default: 1)
+ * - limit: Items per page (default: 10)
+ * 
+ * @param {Request} request - Express request with product ID
+ * @param {Response} response - Express response with reviews and stats
+ */
 async function getProductReviews(request, response) {
   try {
     const { productId } = request.params;
@@ -91,11 +141,13 @@ async function getProductReviews(request, response) {
     const limit = parseInt(request.query.limit) || 10;
     const offset = (page - 1) * limit;
 
+    // Only get published reviews
     const where = {
       productId,
       status: "PUBLISHED",
     };
 
+    // Fetch reviews and total count in parallel
     const [reviews, total] = await Promise.all([
       prisma.review.findMany({
         where,
@@ -109,7 +161,7 @@ async function getProductReviews(request, response) {
       prisma.review.count({ where }),
     ]);
 
-    // 计算平均评分
+    // Get review statistics (average rating, distribution)
     const stats = await getProductReviewStats(productId);
 
     return response.json({
@@ -128,9 +180,24 @@ async function getProductReviews(request, response) {
   }
 }
 
-// ============================================
-// 获取商户的所有评价
-// ============================================
+// ============================================================
+// GET MERCHANT REVIEWS
+// Retrieves all reviews for a specific merchant's products
+// ============================================================
+
+/**
+ * GET /api/reviews/merchant/:merchantId
+ * 
+ * Retrieves all published reviews for products from a merchant
+ * Used on merchant profile pages
+ * 
+ * Query Parameters:
+ * - page: Page number (default: 1)
+ * - limit: Items per page (default: 10)
+ * 
+ * @param {Request} request - Express request with merchant ID
+ * @param {Response} response - Express response with reviews
+ */
 async function getMerchantReviews(request, response) {
   try {
     const { merchantId } = request.params;
@@ -172,9 +239,24 @@ async function getMerchantReviews(request, response) {
   }
 }
 
-// ============================================
-// 获取用户的所有评价
-// ============================================
+// ============================================================
+// GET USER REVIEWS
+// Retrieves all reviews created by a specific user
+// ============================================================
+
+/**
+ * GET /api/reviews/user/:userId
+ * 
+ * Retrieves all reviews created by a user
+ * Used on user's profile/account page
+ * 
+ * Query Parameters:
+ * - page: Page number (default: 1)
+ * - limit: Items per page (default: 10)
+ * 
+ * @param {Request} request - Express request with user ID
+ * @param {Response} response - Express response with reviews
+ */
 async function getUserReviews(request, response) {
   try {
     const { userId } = request.params;
@@ -211,9 +293,20 @@ async function getUserReviews(request, response) {
   }
 }
 
-// ============================================
-// 删除评价（软删除）
-// ============================================
+// ============================================================
+// DELETE REVIEW (SOFT DELETE)
+// Hides a review instead of permanently deleting it
+// ============================================================
+
+/**
+ * DELETE /api/reviews/:id
+ * 
+ * Soft deletes a review by changing status to HIDDEN
+ * Recalculates product rating after hiding
+ * 
+ * @param {Request} request - Express request with review ID
+ * @param {Response} response - Express response object
+ */
 async function deleteReview(request, response) {
   try {
     const { id } = request.params;
@@ -223,12 +316,13 @@ async function deleteReview(request, response) {
       return response.status(404).json({ error: "Review not found" });
     }
 
+    // Soft delete: change status to HIDDEN instead of deleting
     await prisma.review.update({
       where: { id },
       data: { status: "HIDDEN" },
     });
 
-    // 重新计算产品评分
+    // Recalculate product rating after hiding review
     await recalculateProductRating(review.productId);
 
     return response.status(204).send();
@@ -238,19 +332,31 @@ async function deleteReview(request, response) {
   }
 }
 
-// ============================================
-// 辅助函数：重新计算产品评分
-// ============================================
+// ============================================================
+// HELPER: RECALCULATE PRODUCT RATING
+// Updates a product's average rating based on all published reviews
+// ============================================================
+
+/**
+ * Recalculates and updates a product's average rating
+ * Called after creating or deleting a review
+ * 
+ * @param {string} productId - The product ID to update
+ * @returns {Object} New average rating and review count
+ */
 async function recalculateProductRating(productId) {
+  // Calculate average rating from all published reviews
   const result = await prisma.review.aggregate({
     where: { productId, status: "PUBLISHED" },
     _avg: { rating: true },
     _count: { rating: true },
   });
 
+  // Round to nearest integer for product rating
   const avgRating = result._avg.rating ? Math.round(result._avg.rating) : 0;
   const reviewCount = result._count.rating || 0;
 
+  // Update product with new average rating
   await prisma.product.update({
     where: { id: productId },
     data: { rating: avgRating },
@@ -259,23 +365,34 @@ async function recalculateProductRating(productId) {
   return { avgRating, reviewCount };
 }
 
-// ============================================
-// 辅助函数：获取产品评价统计
-// ============================================
+// ============================================================
+// HELPER: GET PRODUCT REVIEW STATISTICS
+// Returns detailed statistics about reviews for a product
+// ============================================================
+
+/**
+ * Gets detailed statistics about reviews for a product
+ * Includes average rating, total count, and star distribution
+ * 
+ * @param {string} productId - The product ID
+ * @returns {Object} Review statistics
+ */
 async function getProductReviewStats(productId) {
+  // Calculate aggregate statistics
   const result = await prisma.review.aggregate({
     where: { productId, status: "PUBLISHED" },
     _avg: { rating: true },
     _count: true,
   });
 
-  // 获取各星级分布
+  // Get distribution of ratings (how many 1-star, 2-star, etc.)
   const distribution = await prisma.review.groupBy({
     by: ["rating"],
     where: { productId, status: "PUBLISHED" },
     _count: { rating: true },
   });
 
+  // Convert to map format { 1: count, 2: count, ... }
   const distMap = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   distribution.forEach((d) => {
     distMap[d.rating] = d._count.rating;
@@ -287,6 +404,10 @@ async function getProductReviewStats(productId) {
     distribution: distMap,
   };
 }
+
+// ============================================================
+// EXPORTS
+// ============================================================
 
 module.exports = {
   createReview,

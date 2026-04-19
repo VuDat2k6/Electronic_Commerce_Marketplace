@@ -1,7 +1,7 @@
 // *********************
 // Role of the component: Filters on shop page
 // Name of the component: Filters.tsx
-// Developer: Aleksandar Kuzmanovic
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <Filters />
 // Input parameters: no input parameters

@@ -1,7 +1,7 @@
 // *********************
 // Role of the component: Signup to the newsletter component by leaving email adress
 // Name of the component: Newsletter.tsx
-// Developer: Aleksandar Kuzmanovic
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <Newsletter />
 // Input parameters: no input parameters

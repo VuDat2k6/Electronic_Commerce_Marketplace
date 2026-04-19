@@ -1,7 +1,7 @@
 // *********************
 // Role of the component: Section title that can be used on any page
 // Name of the component: SectionTitle.tsx
-// Developer: Aleksandar Kuzmanovic
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <SectionTitle />
 // Input parameters: {title: string; path: string}

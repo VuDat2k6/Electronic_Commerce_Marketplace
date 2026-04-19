@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listCustomerOrders } from "../../../server/services/order.service";
+import { listCustomerOrders } from "@/server/services/order.service";
 
 function resolveCustomerId(request: Request): string {
   const headerCustomerId = request.headers.get("x-customer-id");

@@ -1,5 +1,17 @@
+"use client";
+
 import React from 'react';
 import { Notification, NotificationType, NotificationPriority } from '@/types/notification';
+import { 
+  FaShoppingCart, 
+  FaCreditCard, 
+  FaTag, 
+  FaExclamationTriangle,
+  FaCheck,
+  FaTrash,
+  FaCircle 
+} from 'react-icons/fa';
+
 // Simple date formatter function
 const formatTimeAgo = (date: string) => {
   const now = new Date();
@@ -12,15 +24,6 @@ const formatTimeAgo = (date: string) => {
   if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} days ago`;
   return past.toLocaleDateString();
 };
-import { 
-  FaShoppingCart, 
-  FaCreditCard, 
-  FaTag, 
-  FaExclamationTriangle,
-  FaCheck,
-  FaTrash,
-  FaCircle 
-} from 'react-icons/fa';
 
 interface NotificationCardProps {
   notification: Notification;
@@ -89,7 +92,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
   onMarkAsRead,
   onDelete
 }) => {
-    const timeAgo = formatTimeAgo(notification.createdAt);
+  const timeAgo = formatTimeAgo(notification.createdAt);
 
   return (
     <div className={`
@@ -156,6 +159,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
             <div className="flex items-center space-x-2">
               {!notification.isRead && (
                 <button
+                  type="button"
                   onClick={() => onMarkAsRead(notification.id)}
                   className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors"
                   aria-label="Mark as read"
@@ -166,6 +170,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
               )}
               
               <button
+                type="button"
                 onClick={() => onDelete(notification.id)}
                 className="inline-flex items-center px-2 py-1 text-xs font-medium text-red-600 bg-red-100 rounded hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors"
                 aria-label="Delete notification"

@@ -1,4 +1,5 @@
 "use client";
+
 import { CustomButton, SectionTitle } from "@/components";
 import { isValidEmailAddressFormat } from "@/lib/utils";
 import { signIn, useSession } from "next-auth/react";
@@ -15,12 +16,12 @@ const LoginPage = () => {
 
   useEffect(() => {
     // Check if session expired
-    const expired = searchParams.get('expired');
-    if (expired === 'true') {
+    const expired = searchParams.get("expired");
+    if (expired === "true") {
       setError("Your session has expired. Please log in again.");
       toast.error("Your session has expired. Please log in again.");
     }
-    
+
     // if user has already logged in redirect to home page
     if (sessionStatus === "authenticated") {
       router.replace("/");
@@ -53,7 +54,6 @@ const LoginPage = () => {
     if (res?.error) {
       setError("Invalid email or password");
       toast.error("Invalid email or password");
-      if (res?.url) router.replace("/");
     } else {
       setError("");
       toast.success("Successful login");
@@ -169,6 +169,7 @@ const LoginPage = () => {
 
               <div className="mt-6 grid grid-cols-2 gap-4">
                 <button
+                  type="button"
                   className="flex w-full items-center border border-gray-300 justify-center gap-3 rounded-md bg-white px-3 py-1.5 text-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                   onClick={() => {
                     signIn("google");
@@ -181,6 +182,7 @@ const LoginPage = () => {
                 </button>
 
                 <button
+                  type="button"
                   className="flex w-full items-center justify-center gap-3 rounded-md bg-[#24292F] px-3 py-1.5 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#24292F]"
                   onClick={() => {
                     signIn("github");

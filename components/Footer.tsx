@@ -1,7 +1,7 @@
 // *********************
 // Role of the component: Footer component
 // Name of the component: Footer.tsx
-// Developer: Aleksandar Kuzmanovic
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <Footer />
 // Input parameters: no input parameters

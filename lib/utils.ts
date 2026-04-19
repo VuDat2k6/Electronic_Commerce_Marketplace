@@ -202,39 +202,39 @@ export const validateCreditCard = (input: string) => {
  */
 const detectCardType = (cardNumber: string): string => {
   const firstDigit = cardNumber[0];
-  const firstTwoDigits = cardNumber.substring(0, 2);
-  const firstFourDigits = cardNumber.substring(0, 4);
-  const firstThreeDigits = cardNumber.substring(0, 3);
+  const firstTwoDigits = parseInt(cardNumber.substring(0, 2), 10);
+  const firstThreeDigits = parseInt(cardNumber.substring(0, 3), 10);
+  const firstFourDigits = parseInt(cardNumber.substring(0, 4), 10);
   
   // Visa: starts with 4
   if (firstDigit === '4') {
     return 'visa';
   }
   
-  // Mastercard: starts with 5 or 2
-  if (firstDigit === '5' || (firstTwoDigits >= '22' && firstTwoDigits <= '27')) {
+  // Mastercard: starts with 51-55 or 2221-2720
+  if ((firstTwoDigits >= 51 && firstTwoDigits <= 55) || (firstFourDigits >= 2221 && firstFourDigits <= 2720)) {
     return 'mastercard';
   }
   
   // American Express: starts with 34 or 37
-  if (firstTwoDigits === '34' || firstTwoDigits === '37') {
+  if (firstTwoDigits === 34 || firstTwoDigits === 37) {
     return 'amex';
   }
   
   // Discover: starts with 6011, 65, or 644-649
-  if (firstFourDigits === '6011' || firstTwoDigits === '65' || 
-      (firstThreeDigits >= '644' && firstThreeDigits <= '649')) {
+  if (firstFourDigits === 6011 || firstTwoDigits === 65 || 
+      (firstThreeDigits >= 644 && firstThreeDigits <= 649)) {
     return 'discover';
   }
   
   // Diners Club: starts with 300-305, 36, or 38
-  if ((firstThreeDigits >= '300' && firstThreeDigits <= '305') || 
-      firstTwoDigits === '36' || firstTwoDigits === '38') {
+  if ((firstThreeDigits >= 300 && firstThreeDigits <= 305) || 
+      firstTwoDigits === 36 || firstTwoDigits === 38) {
     return 'diners';
   }
   
   // JCB: starts with 35
-  if (firstTwoDigits === '35') {
+  if (firstTwoDigits === 35) {
     return 'jcb';
   }
   
@@ -244,7 +244,27 @@ const detectCardType = (cardNumber: string): string => {
 export const isValidCreditCardExpirationDate = (input: string) => {
   // simple expiration date format check
   const regex = /^(0[1-9]|1[0-2])\/?([0-9]{4}|[0-9]{2})$/;
-  return regex.test(input);
+  if (!regex.test(input)) {
+    return false;
+  }
+
+  const [monthStr, yearStr] = input.split("/");
+  const month = parseInt(monthStr, 10);
+  const year = yearStr.length === 2 ? 2000 + parseInt(yearStr, 10) : parseInt(yearStr, 10);
+
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+
+  if (year < currentYear) {
+    return false;
+  }
+
+  if (year === currentYear && month < currentMonth) {
+    return false;
+  }
+
+  return true;
 };
 
 export const isValidCreditCardCVVOrCVC = (input: string) => {

@@ -21,6 +21,8 @@ const generateId = async () => {
  */
 const createOrderUpdateNotification = async (userId, orderStatus, orderId, totalAmount = null) => {
   try {
+    const normalizedStatus = String(orderStatus || '').toLowerCase();
+
     const statusMessages = {
       'pending': {
         title: 'Order Received',
@@ -54,7 +56,7 @@ const createOrderUpdateNotification = async (userId, orderStatus, orderId, total
       }
     };
 
-    const statusInfo = statusMessages[orderStatus.toLowerCase()] || {
+    const statusInfo = statusMessages[normalizedStatus] || {
       title: 'Order Update',
       message: `Your order #${orderId} status has been updated to: ${orderStatus}`,
       priority: 'NORMAL'
@@ -92,6 +94,8 @@ const createOrderUpdateNotification = async (userId, orderStatus, orderId, total
  */
 const createPaymentNotification = async (userId, paymentStatus, amount, orderId) => {
   try {
+    const normalizedPaymentStatus = String(paymentStatus || '').toLowerCase();
+
     const statusMessages = {
       'success': {
         title: 'Payment Successful',
@@ -110,7 +114,7 @@ const createPaymentNotification = async (userId, paymentStatus, amount, orderId)
       }
     };
 
-    const statusInfo = statusMessages[paymentStatus.toLowerCase()] || {
+    const statusInfo = statusMessages[normalizedPaymentStatus] || {
       title: 'Payment Update',
       message: `Your payment status for order #${orderId} has been updated.`,
       priority: 'NORMAL'
@@ -209,6 +213,10 @@ const createSystemAlertNotification = async (userId, title, message, priority = 
  */
 const createBulkNotifications = async (userIds, title, message, type = 'SYSTEM_ALERT', priority = 'NORMAL', metadata = {}) => {
   try {
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return 0;
+    }
+
     // Generate all IDs first
     const notificationData = await Promise.all(
       userIds.map(async (userId) => {

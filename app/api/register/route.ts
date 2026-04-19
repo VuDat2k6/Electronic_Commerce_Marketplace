@@ -44,7 +44,7 @@ export const POST = async (request: Request) => {
         id: nanoid(),
         email,
         password: hashedPassword,
-        role: "user",
+        role: "buyer",
       },
     });
 

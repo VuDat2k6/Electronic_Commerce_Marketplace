@@ -10,7 +10,9 @@ export class AppError extends Error {
     this.statusCode = statusCode;
     this.isOperational = isOperational;
 
-    Error.captureStackTrace(this, this.constructor);
+    if (typeof Error.captureStackTrace === "function") {
+      Error.captureStackTrace(this, this.constructor);
+    }
   }
 }
 
@@ -58,7 +60,9 @@ export const handlePrismaError = (error: any): ErrorResponse => {
     case 'P2002':
       return {
         error: "A record with this information already exists",
-        details: prismaError.meta?.target ? `Field: ${prismaError.meta.target.join(', ')}` : undefined,
+        details: prismaError.meta?.target
+          ? `Field: ${Array.isArray(prismaError.meta.target) ? prismaError.meta.target.join(', ') : String(prismaError.meta.target)}`
+          : undefined,
         timestamp: new Date().toISOString()
       };
     case 'P2025':

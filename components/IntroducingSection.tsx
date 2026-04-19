@@ -1,7 +1,7 @@
 // *********************
 // Role of the component: IntroducingSection with the text "Introducing TFDTRONIC"
 // Name of the component: IntroducingSection.tsx
-// Developer: Aleksandar Kuzmanovic
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <IntroducingSection />
 // Input parameters: no input parameters

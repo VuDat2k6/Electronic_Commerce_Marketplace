@@ -1,7 +1,7 @@
 // *********************
 // Role of the component: Product item component 
 // Name of the component: ProductItem.tsx
-// Developer: Aleksandar Kuzmanovic
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <ProductItem product={product} color={color} />
 // Input parameters: { product: Product; color: string; }
@@ -26,6 +26,10 @@ const ProductItem = ({
     return (cents / 100).toFixed(2);
   };
 
+  // Get seller name - hỗ trợ cả seller mới và merchant cũ
+  const sellerName = product.seller?.shopName || (product as any).merchant?.name;
+  const sellerId = product.sellerId || (product as any).merchantId;
+
   return (
     <div className="flex flex-col items-center gap-y-2">
       <Link href={`/product/${product.slug}`}>
@@ -49,6 +53,16 @@ const ProductItem = ({
       >
         {sanitize(product.title)}
       </Link>
+      {/* Seller name link */}
+      {sellerName && sellerId && (
+        <Link
+          href={`/seller/${sellerId}`}
+          className="text-xs text-green-600 hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          by {sellerName}
+        </Link>
+      )}
       <p
         className={
           color === "black"

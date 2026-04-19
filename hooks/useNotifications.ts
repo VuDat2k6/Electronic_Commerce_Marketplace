@@ -35,7 +35,9 @@ export const useNotifications = () => {
     if (!session?.user?.email) return null;
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/users/email/${session.user.email}`);
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/users/email/${encodeURIComponent(session.user.email)}`
+      );
       const userData = await response.json();
       return userData?.id || null;
     } catch (error) {
@@ -60,6 +62,8 @@ export const useNotifications = () => {
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch notifications';
       setError(errorMessage);
       toast.error(errorMessage);
+    } finally {
+      setLoading(false);
     }
   }, [filters, getCurrentUserId, setNotifications, setLoading, setError]);
 
@@ -213,7 +217,9 @@ export const useUnreadCount = () => {
 
     try {
       // Get user ID first
-      const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/users/email/${session.user.email}`);
+      const userResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/users/email/${encodeURIComponent(session.user.email)}`
+      );
       const userData = await userResponse.json();
       
       if (userData?.id) {

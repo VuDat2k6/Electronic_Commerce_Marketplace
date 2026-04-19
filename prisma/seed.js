@@ -1,229 +1,121 @@
 const { PrismaClient } = require("@prisma/client");
+const bcrypt = require("bcryptjs");
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("Starting seed...");
+  console.log("🔧 Bắt đầu seed database...");
 
-  // Create Categories
-  const categories = await Promise.all([
-    prisma.category.upsert({
-      where: { name: "Smart Phones" },
-      update: {},
-      create: { id: "cat-smart-phones", name: "Smart Phones" },
-    }),
-    prisma.category.upsert({
-      where: { name: "Laptops" },
-      update: {},
-      create: { id: "cat-laptops", name: "Laptops" },
-    }),
-    prisma.category.upsert({
-      where: { name: "Tablets" },
-      update: {},
-      create: { id: "cat-tablets", name: "Tablets" },
-    }),
-    prisma.category.upsert({
-      where: { name: "Cameras" },
-      update: {},
-      create: { id: "cat-cameras", name: "Cameras" },
-    }),
-    prisma.category.upsert({
-      where: { name: "Smart Watches" },
-      update: {},
-      create: { id: "cat-smart-watches", name: "Smart Watches" },
-    }),
-    prisma.category.upsert({
-      where: { name: "PCs" },
-      update: {},
-      create: { id: "cat-pcs", name: "PCs" },
-    }),
-    prisma.category.upsert({
-      where: { name: "Printers" },
-      update: {},
-      create: { id: "cat-printers", name: "Printers" },
-    }),
-    prisma.category.upsert({
-      where: { name: "Earbuds" },
-      update: {},
-      create: { id: "cat-earbuds", name: "Earbuds" },
-    }),
-    prisma.category.upsert({
-      where: { name: "Head Phones" },
-      update: {},
-      create: { id: "cat-head-phones", name: "Head Phones" },
-    }),
-    prisma.category.upsert({
-      where: { name: "Mouses" },
-      update: {},
-      create: { id: "cat-mouses", name: "Mouses" },
-    }),
-  ]);
+  // Tạo tài khoản admin mặc định
+  const adminEmail = "admin@tfdtronic.com";
+  const adminPassword = "admin123";
+  const hashedPassword = await bcrypt.hash(adminPassword, 14);
 
-  console.log("Created categories:", categories.length);
-
-  // Create Merchant
-  const merchant = await prisma.merchant.upsert({
-    where: { id: "merchant-tech-store" },
-    update: {},
-    create: {
-      id: "merchant-tech-store",
-      name: "Tech Store",
-      description: "Your trusted electronics store",
-      email: "contact@techstore.com",
-      phone: "+1234567890",
-      address: "123 Tech Street, Silicon Valley",
-      status: "ACTIVE",
-      shippingFee: 999,
-    },
+  const existingAdmin = await prisma.user.findUnique({
+    where: { email: adminEmail },
   });
 
-  console.log("Created merchant:", merchant.name);
+  if (existingAdmin) {
+    console.log("⚠️  Admin đã tồn tại, cập nhật role...");
+    await prisma.user.update({
+      where: { email: adminEmail },
+      data: { role: "admin" },
+    });
+    console.log("✅ Admin đã được cập nhật!");
+  } else {
+    await prisma.user.create({
+      data: {
+        id: "admin-" + Date.now(),
+        email: adminEmail,
+        password: hashedPassword,
+        role: "admin",
+      },
+    });
+    console.log("✅ Admin đã được tạo!");
+  }
 
-  // Products with high-quality downloaded images from Unsplash
-  // Price stored in CENTS (99900 = $999.00)
-  const products = [
-    {
-      id: "prod-iphone-15",
-      slug: "iphone-15-pro",
-      title: "iPhone 15 Pro",
-      mainImage: "/iphone-15-pro.jpg",
-      price: 99900, // $999.00
-      rating: 5,
-      description: "Latest iPhone with A17 Pro chip",
-      manufacturer: "Apple",
-      inStock: 50,
-      status: "PUBLISHED",
-      categoryId: "cat-smart-phones",
-      merchantId: "merchant-tech-store",
-    },
-    {
-      id: "prod-samsung-s24",
-      slug: "samsung-s24-ultra",
-      title: "Samsung Galaxy S24 Ultra",
-      mainImage: "/samsung-s24.jpg",
-      price: 119900, // $1199.00
-      rating: 5,
-      description: "Premium Android smartphone with AI features",
-      manufacturer: "Samsung",
-      inStock: 30,
-      status: "PUBLISHED",
-      categoryId: "cat-smart-phones",
-      merchantId: "merchant-tech-store",
-    },
-    {
-      id: "prod-macbook-pro",
-      slug: "macbook-pro-m3",
-      title: "MacBook Pro 14-inch M3",
-      mainImage: "/macbook-pro.jpg",
-      price: 199900, // $1999.00
-      rating: 5,
-      description: "Powerful laptop with M3 chip",
-      manufacturer: "Apple",
-      inStock: 20,
-      status: "PUBLISHED",
-      categoryId: "cat-laptops",
-      merchantId: "merchant-tech-store",
-    },
-    {
-      id: "prod-ipad-pro",
-      slug: "ipad-pro-12-9",
-      title: "iPad Pro 12.9-inch",
-      mainImage: "/ipad-pro.jpg",
-      price: 109900, // $1099.00
-      rating: 4,
-      description: "Powerful tablet for professionals",
-      manufacturer: "Apple",
-      inStock: 40,
-      status: "PUBLISHED",
-      categoryId: "cat-tablets",
-      merchantId: "merchant-tech-store",
-    },
-    {
-      id: "prod-airpods-pro",
-      slug: "airpods-pro-2",
-      title: "AirPods Pro 2nd Gen",
-      mainImage: "/airpods-pro.jpg",
-      price: 24900, // $249.00
-      rating: 5,
-      description: "Premium wireless earbuds with ANC",
-      manufacturer: "Apple",
-      inStock: 100,
-      status: "PUBLISHED",
-      categoryId: "cat-earbuds",
-      merchantId: "merchant-tech-store",
-    },
-    {
-      id: "prod-apple-watch",
-      slug: "apple-watch-ultra-2",
-      title: "Apple Watch Ultra 2",
-      mainImage: "/apple-watch.jpg",
-      price: 79900, // $799.00
-      rating: 5,
-      description: "Advanced smartwatch for athletes",
-      manufacturer: "Apple",
-      inStock: 35,
-      status: "PUBLISHED",
-      categoryId: "cat-smart-watches",
-      merchantId: "merchant-tech-store",
-    },
-    {
-      id: "prod-sony-wh1000xm5",
-      slug: "sony-wh-1000xm5",
-      title: "Sony WH-1000XM5",
-      mainImage: "/sony-headphones.jpg",
-      price: 34900, // $349.00
-      rating: 5,
-      description: "Industry-leading noise cancelling headphones",
-      manufacturer: "Sony",
-      inStock: 60,
-      status: "PUBLISHED",
-      categoryId: "cat-head-phones",
-      merchantId: "merchant-tech-store",
-    },
-    {
-      id: "prod-logitech-mx",
-      slug: "logitech-mx-master-3",
-      title: "Logitech MX Master 3",
-      mainImage: "/logitech-mouse.jpg",
-      price: 9900, // $99.00
-      rating: 5,
-      description: "Premium wireless mouse",
-      manufacturer: "Logitech",
-      inStock: 80,
-      status: "PUBLISHED",
-      categoryId: "cat-mouses",
-      merchantId: "merchant-tech-store",
-    },
+  // Tạo một số categories mẫu
+  const categories = [
+    { id: "cat-laptops", name: "Laptops" },
+    { id: "cat-phones", name: "Phones" },
+    { id: "cat-tablets", name: "Tablets" },
+    { id: "cat-accessories", name: "Accessories" },
+    { id: "cat-cameras", name: "Cameras" },
   ];
 
-  for (const product of products) {
-    await prisma.product.upsert({
-      where: { slug: product.slug },
-      update: {},
-      create: product,
+  for (const cat of categories) {
+    const existing = await prisma.category.findUnique({
+      where: { name: cat.name },
     });
+    if (!existing) {
+      await prisma.category.create({ data: cat });
+      console.log(`✅ Category "${cat.name}" đã được tạo`);
+    }
   }
 
-  console.log("Created products:", products.length);
+  // Tạo một seller mẫu để test
+  const sellerEmail = "seller@tfdtronic.com";
+  const sellerPassword = "seller123";
+  const hashedSellerPassword = await bcrypt.hash(sellerPassword, 14);
 
-  // Link user to merchant (if user exists)
-  const user = await prisma.user.findFirst();
-  if (user) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {},
+  const existingSeller = await prisma.user.findUnique({
+    where: { email: sellerEmail },
+  });
+
+  if (!existingSeller) {
+    await prisma.user.create({
+      data: {
+        id: "seller-" + Date.now(),
+        email: sellerEmail,
+        password: hashedSellerPassword,
+        role: "seller",
+        shopName: "TFDTRONIC Official Store",
+        shopDescription: "Cửa hàng chính thức của TFDTRONIC",
+        shopPhone: "0123456789",
+        shopAddress: "123 Electronics Street, Tech City",
+        shopStatus: "ACTIVE",
+        shopApprovedAt: new Date(),
+        shopCreatedAt: new Date(),
+      },
     });
-    console.log("User found:", user.email);
+    console.log("✅ Seller mẫu đã được tạo!");
   }
 
-  console.log("Seed completed successfully!");
+  // Tạo một buyer mẫu để test
+  const buyerEmail = "buyer@tfdtronic.com";
+  const buyerPassword = "buyer123";
+  const hashedBuyerPassword = await bcrypt.hash(buyerPassword, 14);
+
+  const existingBuyer = await prisma.user.findUnique({
+    where: { email: buyerEmail },
+  });
+
+  if (!existingBuyer) {
+    await prisma.user.create({
+      data: {
+        id: "buyer-" + Date.now(),
+        email: buyerEmail,
+        password: hashedBuyerPassword,
+        role: "buyer",
+      },
+    });
+    console.log("✅ Buyer mẫu đã được tạo!");
+  }
+
+  console.log("\n📋 Thông tin đăng nhập:");
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log("Admin:  " + adminEmail + " / " + adminPassword);
+  console.log("Seller: " + sellerEmail + " / " + sellerPassword);
+  console.log("Buyer:  " + buyerEmail + " / " + buyerPassword);
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 }
 
 main()
   .catch((e) => {
-    console.error("Seed error:", e);
+    console.error("❌ Lỗi:", e);
     process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();
+    console.log("✅ Hoàn tất!");
   });

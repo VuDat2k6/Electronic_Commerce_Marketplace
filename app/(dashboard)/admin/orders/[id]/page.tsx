@@ -52,23 +52,43 @@ const AdminSingleOrder = () => {
 
   useEffect(() => {
     const fetchOrderData = async () => {
-      const response = await apiClient.get(
-        `/api/orders/${params?.id}`
-      );
-      const data: Order = await response.json();
-      setOrder(data);
+      try {
+        const response = await apiClient.get(
+          `/api/orders/${params?.id}`
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch order");
+        }
+
+        const data: Order = await response.json();
+        setOrder(data);
+      } catch (error) {
+        toast.error("Failed to load order");
+      }
     };
 
     const fetchOrderProducts = async () => {
-      const response = await apiClient.get(
-        `/api/order-product/${params?.id}`
-      );
-      const data: OrderProduct[] = await response.json();
-      setOrderProducts(data);
+      try {
+        const response = await apiClient.get(
+          `/api/order-product/${params?.id}`
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch order products");
+        }
+
+        const data: OrderProduct[] = await response.json();
+        setOrderProducts(data);
+      } catch (error) {
+        toast.error("Failed to load order products");
+      }
     };
 
-    fetchOrderData();
-    fetchOrderProducts();
+    if (params?.id) {
+      fetchOrderData();
+      fetchOrderProducts();
+    }
   }, [params?.id]);
 
   const updateOrder = async () => {
@@ -77,9 +97,7 @@ const AdminSingleOrder = () => {
       order?.lastname.length > 0 &&
       order?.phone.length > 0 &&
       order?.email.length > 0 &&
-      order?.company.length > 0 &&
       order?.adress.length > 0 &&
-      order?.apartment.length > 0 &&
       order?.city.length > 0 &&
       order?.country.length > 0 &&
       order?.postalCode.length > 0
@@ -99,23 +117,23 @@ const AdminSingleOrder = () => {
         return;
       }
 
-      apiClient.put(`/api/orders/${order?.id}`, {
-        method: "PUT", // or 'PUT'
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(order),
-      })
-        .then((response) => {
-          if (response.status === 200) {
-            toast.success("Order updated successfuly");
-          } else {
-            throw Error("There was an error while updating a order");
-          }
-        })
-        .catch((error) =>
-          toast.error("There was an error while updating a order")
-        );
+      try {
+        const response = await apiClient.put(`/api/orders/${order?.id}`, {
+          method: "PUT", // or 'PUT'
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(order),
+        });
+
+        if (response.status === 200) {
+          toast.success("Order updated successfuly");
+        } else {
+          throw Error("There was an error while updating a order");
+        }
+      } catch (error) {
+        toast.error("There was an error while updating a order");
+      }
     } else {
       toast.error("Please fill all fields");
     }
@@ -126,18 +144,30 @@ const AdminSingleOrder = () => {
       method: "DELETE",
     };
 
-    apiClient.delete(
-      `/api/order-product/${order?.id}`,
-      requestOptions
-    ).then((response) => {
-      apiClient.delete(
+    try {
+      const deleteOrderProductsResponse = await apiClient.delete(
+        `/api/order-product/${order?.id}`,
+        requestOptions
+      );
+
+      if (!deleteOrderProductsResponse.ok) {
+        throw new Error("Failed to delete order products");
+      }
+
+      const deleteOrderResponse = await apiClient.delete(
         `/api/orders/${order?.id}`,
         requestOptions
-      ).then((response) => {
-        toast.success("Order deleted successfully");
-        router.push("/admin/orders");
-      });
-    });
+      );
+
+      if (!deleteOrderResponse.ok) {
+        throw new Error("Failed to delete order");
+      }
+
+      toast.success("Order deleted successfully");
+      router.push("/admin/orders");
+    } catch (error) {
+      toast.error("There was an error while deleting the order");
+    }
   };
 
   return (

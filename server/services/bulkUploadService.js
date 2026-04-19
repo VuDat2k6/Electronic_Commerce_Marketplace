@@ -236,8 +236,11 @@ async function applyItemUpdates(tx, batchId, updates) {
     const current = byId.get(upd.itemId);
     if (!current) continue;
 
-    const price = Math.round(Number(upd.price));
-    const inStock = Number(upd.inStock) === 1 ? 1 : 0;
+    const price = Number(upd.price);
+    const inStock = Math.floor(Number(upd.inStock));
+
+    if (!Number.isFinite(price) || price < 0) continue;
+    if (!Number.isFinite(inStock) || inStock < 0) continue;
 
     if (current.productId) {
       await tx.product.update({

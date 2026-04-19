@@ -1,7 +1,7 @@
 // *********************
 // Role of the component: Showing products on the shop page with applied filter and sort
 // Name of the component: Products.tsx
-// Developer: Aleksandar Kuzmanovic
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <Products params={params} searchParams={searchParams} />
 // Input parameters: { params, searchParams }: { params: { slug?: string[] }, searchParams: { [key: string]: string | string[] | undefined } }
@@ -12,11 +12,22 @@ import React from "react";
 import ProductItem from "./ProductItem";
 import apiClient from "@/lib/api";
 
-const Products = async ({ params, searchParams }: { params: { slug?: string[] }, searchParams: { [key: string]: string | string[] | undefined } }) => {
+const Products = async ({
+  params,
+  searchParams,
+}: {
+  params: { slug?: string[] };
+  searchParams: { [key: string]: string | string[] | undefined };
+}) => {
+  const getSearchParam = (value: string | string[] | undefined) =>
+    Array.isArray(value) ? value[0] : value;
+
   // getting all data from URL slug and preparing everything for sending GET request
-  const inStockNum = searchParams?.inStock === "true" ? 1 : 0;
-  const outOfStockNum = searchParams?.outOfStock === "true" ? 1 : 0;
-  const page = searchParams?.page ? Number(searchParams?.page) : 1;
+  const inStockNum = getSearchParam(searchParams?.inStock) === "true" ? 1 : 0;
+  const outOfStockNum = getSearchParam(searchParams?.outOfStock) === "true" ? 1 : 0;
+  const page = getSearchParam(searchParams?.page)
+    ? Number(getSearchParam(searchParams?.page))
+    : 1;
 
   let stockMode: string = "lte";
   
@@ -25,45 +36,46 @@ const Products = async ({ params, searchParams }: { params: { slug?: string[] },
   if (inStockNum === 1) {
     stockMode = "equals";
   }
- // If out of stock checkbox is checked, stockMode is "lt"
+  // If out of stock checkbox is checked, stockMode is "lt"
   if (outOfStockNum === 1) {
     stockMode = "lt";
   }
-   // If in stock and out of stock checkboxes are checked, stockMode is "lte"
+  // If in stock and out of stock checkboxes are checked, stockMode is "lte"
   if (inStockNum === 1 && outOfStockNum === 1) {
     stockMode = "lte";
   }
-   // If in stock and out of stock checkboxes aren't checked, stockMode is "gt"
+  // If in stock and out of stock checkboxes aren't checked, stockMode is "lte"
   if (inStockNum === 0 && outOfStockNum === 0) {
-    stockMode = "gt";
+    stockMode = "lte";
   }
 
   let products = [];
 
   try {
     // Build category filter if slug exists
-    const categoryFilter = params?.slug?.length && params.slug.length > 0 
-      ? `&filters[category][$equals]=${encodeURIComponent(params.slug[0])}` 
-      : "";
-    
+    const categoryFilter =
+      params?.slug?.length && params.slug.length > 0
+        ? `&filters[category][$equals]=${encodeURIComponent(params.slug[0])}`
+        : "";
+
+    const price = getSearchParam(searchParams?.price) || 3000;
+    const rating = Number(getSearchParam(searchParams?.rating)) || 0;
+    const sort = getSearchParam(searchParams?.sort) || "";
+
     // sending API request with filtering, sorting and pagination for getting all products
-    const apiUrl = `/api/products?filters[price][$lte]=${
-        searchParams?.price || 3000
-      }&filters[rating][$gte]=${
-        Number(searchParams?.rating) || 0
-      }&filters[inStock][$${stockMode}]=1${categoryFilter}&sort=${searchParams?.sort || ""}&page=${page}`;
-    
+    const apiUrl = `/api/products?filters[price][$lte]=${price}&filters[rating][$gte]=${rating}&filters[inStock][$${stockMode}]=1${categoryFilter}&sort=${sort}&page=${page}`;
+
     const data = await apiClient.get(apiUrl);
 
     if (!data.ok) {
-      console.error('Failed to fetch products:', data.statusText);
+      console.error("Failed to fetch products:", data.statusText);
       products = [];
     } else {
       const result = await data.json();
       products = Array.isArray(result) ? result : [];
     }
   } catch (error) {
-    console.error('Error fetching products:', error);
+    console.error("Error fetching products:", error);
     products = [];
   }
 

@@ -115,6 +115,11 @@ class MigrationValidator {
 
     async validateAllMigrations() {
         const migrationsDir = path.join(__dirname, '../prisma/migrations');
+
+        if (!fs.existsSync(migrationsDir)) {
+            throw new Error(`Migrations directory not found: ${migrationsDir}`);
+        }
+
         const migrations = fs.readdirSync(migrationsDir)
             .filter(dir => dir !== 'migration_lock.toml')
             .sort();
@@ -159,26 +164,31 @@ if (require.main === module) {
     const validator = new MigrationValidator();
     
     const command = process.argv[2];
-    
-    switch (command) {
-        case 'validate':
-            validator.validateAllMigrations()
-                .then(() => validator.close())
-                .catch(console.error);
-            break;
-        case 'backup':
-            validator.createBackup()
-                .then(() => validator.close())
-                .catch(console.error);
-            break;
-        case 'safe-migrate':
-            validator.runSafeMigration()
-                .then(() => validator.close())
-                .catch(console.error);
-            break;
-        default:
-            console.log('Usage: node migration-validator.js [validate|backup|safe-migrate]');
-    }
+
+    const run = async () => {
+        try {
+            switch (command) {
+                case 'validate':
+                    await validator.validateAllMigrations();
+                    break;
+                case 'backup':
+                    await validator.createBackup();
+                    break;
+                case 'safe-migrate':
+                    await validator.runSafeMigration();
+                    break;
+                default:
+                    console.log('Usage: node migration-validator.js [validate|backup|safe-migrate]');
+            }
+        } catch (error) {
+            console.error(error);
+            process.exitCode = 1;
+        } finally {
+            await validator.close();
+        }
+    };
+
+    run();
 }
 
 module.exports = MigrationValidator;

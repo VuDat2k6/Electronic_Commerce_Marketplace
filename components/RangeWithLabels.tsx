@@ -1,7 +1,7 @@
 // *********************
 // Role of the component: Range with labels for price intented to be on the shop page
 // Name of the component: RangeWithLabels.tsx
-// Developer: Aleksandar Kuzmanovic
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <RangeWithLabels />
 // Input parameters: no input parameters

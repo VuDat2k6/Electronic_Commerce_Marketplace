@@ -6,9 +6,11 @@ async function getSingleProductImages(request, response) {
   const images = await prisma.image.findMany({
     where: { productID: id },
   });
-  if (!images) {
-    return response.json({ error: "Images not found" }, { status: 404 });
+
+  if (!images || images.length === 0) {
+    return response.status(404).json({ error: "Images not found" });
   }
+
   return response.json(images);
 }
 
@@ -79,8 +81,6 @@ async function deleteImage(request, response) {
     return response.status(500).json({ error: "Error deleting image" });
   }
 }
-
-
 
 module.exports = {
   getSingleProductImages,
