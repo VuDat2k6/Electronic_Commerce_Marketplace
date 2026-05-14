@@ -1,0 +1,135 @@
+# CodeRabbit Configuration for Electronic Commerce Marketplace
+# https://docs.coderabbit.ai/configuration/overview
+
+language: en-IN
+ai-format: Claude 4 Sonnet
+
+early_access: true
+
+reviews:
+  profile: detailed
+  high_level_summary:
+    show_title: true
+    auto_title: true
+    showWalkthrough: true
+    show_line_numbers: true
+    show_inline_comments: true
+  poem: false
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    auto_title: always
+    comment_without_code: always
+    status: complete
+    collapsewalkthrough: false
+    path_filters:
+      - "!**/.next/**"
+      - "!**/node_modules/**"
+      - "!**/out/**"
+      - "!**/build/**"
+      - "!**/dist/**"
+      - "!**/*.lock"
+      - "!**/bun.lockb"
+    path_instructions:
+      - path: "**/*"
+        type: basic
+  review_status: true
+  annotation_status: "all"
+  change_position_on_review: true
+  multi_line_trailing_comma: true
+  collapsewalkthrough: false
+  path_filters:
+    - "!**/.next/**"
+    - "!**/node_modules/**"
+    - "!**/out/**"
+    - "!**/build/**"
+    - "!**/dist/**"
+    - "!**/*.lock"
+    - "!**/bun.lockb"
+  path_instructions:
+    - path: "**/*"
+      type: enhanced
+
+chat:
+  auto_reply: true
+
+tools:
+  biome:
+    enabled: true
+  ruff:
+    enabled: false
+  ruff_cache:
+    enabled: false
+  starlark:
+    enabled: false
+
+  tools_settings:
+    # eslint: "**/{*.js,*.jsx,*.ts,*.tsx}"
+    eslint: false
+    ruff:
+      enabled: false
+    biome:
+      enabled: true
+      override:
+        config: "~/.biome.jsonc"
+    checkov:
+      enabled: false
+    detekt:
+      enabled: false
+    hadolint:
+      enabled: false
+    oxlint:
+      enabled: false
+    shellcheck:
+      enabled: false
+    actionlint:
+      enabled: false
+    tsconfig:
+      enabled: false
+    htmlhint:
+      enabled: false
+    osv-scanner:
+      enabled: false
+    trivy:
+      enabled: false
+    trufflehog:
+      enabled: false
+    dotenv-linter:
+      enabled: false
+    markdownlint:
+      enabled: false
+    yamllint:
+      enabled: false
+    gitleaks:
+      enabled: false
+    checkov:
+      enabled: false
+
+custom_flows:
+  auto_review:
+    - name: "Next.js + Node.js Code Review"
+      description: "Automated code review for Next.js frontend and Node.js backend"
+      trigger: "auto_review"
+
+path_filters:
+  exclude:
+    - "**/.next/**"
+    - "**/node_modules/**"
+    - "**/out/**"
+    - "**/build/**"
+    - "**/dist/**"
+    - "**/*.lock"
+    - "**/bun.lockb"
+    - "**/package-lock.json"
+    - "**/yarn.lock"
+
+path_instructions:
+  - path: "**/*"
+    type: enhanced
+    options:
+      skip_restricted_globs: true
+
+coderabbit_gh_app:
+  # CodeRabbit GitHub App configuration - will be configured during installation
+  # installation_id will be added after CodeRabbit App is installed on the repository
+  pass_through: false
