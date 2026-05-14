@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Montserrat } from "next/font/google";
 import "./globals.css";
 import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/authOptions";
 import 'svgmap/dist/svgMap.min.css';
 import SessionProvider from "@/utils/SessionProvider";
 import Header from "@/components/Header";
@@ -11,6 +12,11 @@ import SessionTimeoutWrapper from "@/components/SessionTimeoutWrapper";
 import ProgressBar from "@/components/ProgressBar";
 
 const inter = Inter({ subsets: ["latin"] });
+const montserrat = Montserrat({
+  subsets: ["latin"],
+  variable: "--font-montserrat",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Electronic Marketplace",
@@ -28,10 +34,10 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await getServerSession();
+  const session = await getServerSession(authOptions) as any;
   return (
     <html lang="en" data-theme="light">
-      <body className={inter.className}>
+      <body className={`${inter.className} ${montserrat.variable}`}>
         <SessionProvider session={session}>
           <ProgressBar />
           <SessionTimeoutWrapper />

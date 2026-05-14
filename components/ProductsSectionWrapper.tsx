@@ -1,18 +1,10 @@
-// ProductsSectionWrapper - Server component wrapper for ProductsSection
-// Fetches data on the server and passes it to the client component
+// ProductsSectionWrapper - Uses mock data from ProductsSection
+"use client";
 
-import React from "react";
-import ProductsSection from "./ProductsSection";
-import apiClient from "@/lib/api";
+import { ProductsSection } from "./ProductsSection";
 
-interface Product {
-  id: string;
-  slug: string;
-  title: string;
-  price: number;
-  mainImage: string;
-  rating?: number;
-  inStock?: number;
+export function ProductsSectionWrapper() {
+  return <ProductsSection />;
 }
 
 /**

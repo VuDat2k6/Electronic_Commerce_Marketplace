@@ -1,4 +1,4 @@
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { redirect } from "next/navigation";
 import SellerSidebar from "@/components/SellerSidebar";
@@ -14,7 +14,7 @@ export default async function SellerLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(authOptions) as any;
 
   // If not logged in or not a seller, redirect
   if (!session) redirect("/login");

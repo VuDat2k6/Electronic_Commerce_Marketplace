@@ -1,8 +1,8 @@
-// Home page - REDESIGNED with Purple-Cyan theme
-// Using server component for better performance
-
-import { Hero, CategoryMenu, Incentives, IntroducingSection, Newsletter } from "@/components";
-import { ProductsSectionWrapper } from "@/components/ProductsSectionWrapper";
+// Home page - Exactly matching the zip file structure
+import HeroSlider from "@/components/HeroSlider";
+import CategoriesGrid from "@/components/CategoriesGrid";
+import ProductsSectionWrapper from "@/components/ProductsSectionWrapper";
+import Incentives from "@/components/Incentives";
 
 /**
  * Renders the redesigned Purple-Cyan themed home page composed of the hero, category menu, products section wrapper, introducing section, incentives, and newsletter.
@@ -11,16 +11,11 @@ import { ProductsSectionWrapper } from "@/components/ProductsSectionWrapper";
  */
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Hero Section - Using separate Hero component */}
-      <Hero />
-
-      {/* Existing Components */}
-      <CategoryMenu />
+    <div className="min-h-screen bg-white">
+      <HeroSlider />
+      <CategoriesGrid />
       <ProductsSectionWrapper />
-      <IntroducingSection />
       <Incentives />
-      <Newsletter />
     </div>
   );
 }

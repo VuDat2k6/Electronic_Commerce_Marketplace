@@ -1,18 +1,14 @@
+// SingleProductPage - Clean, modern design
 import {
   StockAvailabillity,
-  UrgencyText,
-
   ProductTabs,
   SingleProductDynamicFields,
-  
 } from "@/components";
 import apiClient from "@/lib/api";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import React from "react";
-import { FaSquareFacebook } from "react-icons/fa6";
-import { FaSquareXTwitter } from "react-icons/fa6";
-import { FaSquarePinterest } from "react-icons/fa6";
+import { FaFacebook, FaTwitter, FaPinterest } from "react-icons/fa";
 import { sanitize } from "@/lib/sanitize";
 
 interface ImageItem {
@@ -22,24 +18,18 @@ interface ImageItem {
 }
 
 interface SingleProductPageProps {
-  params: Promise<{  productSlug: string, id: string }>;
+  params: Promise<{ productSlug: string; id: string }>;
 }
 
 const SingleProductPage = async ({ params }: SingleProductPageProps) => {
   const paramsAwaited = await params;
-  // sending API request for a single product with a given product slug
-  const data = await apiClient.get(
-    `/api/slugs/${paramsAwaited?.productSlug}`
-  );
+  const data = await apiClient.get(`/api/slugs/${paramsAwaited?.productSlug}`);
   const product = await data.json();
 
-  // sending API request for more than 1 product image if it exists
-  let images = [];
-  if (paramsAwaited?.id && paramsAwaited.id !== 'undefined') {
+  let images: ImageItem[] = [];
+  if (paramsAwaited?.id && paramsAwaited.id !== "undefined") {
     try {
-      const imagesData = await apiClient.get(
-        `/api/images/${paramsAwaited?.id}`
-      );
+      const imagesData = await apiClient.get(`/api/images/${paramsAwaited?.id}`);
       if (imagesData.ok) {
         images = await imagesData.json();
       }
@@ -52,103 +42,114 @@ const SingleProductPage = async ({ params }: SingleProductPageProps) => {
     notFound();
   }
 
-  // Format price from cents to dollars
-  const formatPrice = (cents: number) => {
-    return (cents / 100).toFixed(2);
-  };
+  const formatPrice = (cents: number) => (cents / 100).toFixed(2);
 
   return (
-    <div className="bg-white">
-      <div className="max-w-screen-2xl mx-auto">
-        <div className="flex justify-center gap-x-16 pt-10 max-lg:flex-col items-center gap-y-5 px-5">
-          <div>
-            <Image
-              src={product?.mainImage || "/product_placeholder.jpg"}
-              width={500}
-              height={500}
-              alt="main image"
-              className="w-auto h-auto"
-            />
-            <div className="flex justify-around mt-5 flex-wrap gap-y-1 max-[500px]:justify-center max-[500px]:gap-x-1">
-              {images && images.length > 0 && images.map((imageItem: ImageItem, key: number) => (
-                <Image
-                  key={imageItem.imageID + key}
-                  src={imageItem.image}
-                  width={100}
-                  height={100}
-                  alt="product image"
-                  className="w-auto h-auto"
-                />
-              ))}
+    <div className="bg-white min-h-screen">
+      <div className="max-w-7xl mx-auto px-4 py-8 lg:py-12">
+        {/* Breadcrumb */}
+        <nav className="text-sm text-gray-500 mb-8">
+          <a href="/" className="hover:text-gray-900">Home</a>
+          <span className="mx-2">/</span>
+          <a href="/shop" className="hover:text-gray-900">Products</a>
+          <span className="mx-2">/</span>
+          <span className="text-gray-900">{sanitize(product?.title)}</span>
+        </nav>
+
+        {/* Product Info */}
+        <div className="grid lg:grid-cols-2 gap-12 lg:gap-16">
+          {/* Image Gallery */}
+          <div className="space-y-4">
+            <div className="aspect-square bg-gray-50 rounded-2xl overflow-hidden border border-gray-100">
+              <Image
+                src={product?.mainImage || "/product_placeholder.jpg"}
+                width={600}
+                height={600}
+                alt={sanitize(product?.title) || "Product image"}
+                className="w-full h-full object-cover"
+              />
             </div>
-          </div>
-          <div className="flex flex-col gap-y-7 text-black max-[500px]:text-center">
-        
-            <h1 className="text-3xl">{sanitize(product?.title)}</h1>
-            <p className="text-xl font-semibold">${formatPrice(product?.price)}</p>
-            <StockAvailabillity stock={94} inStock={product?.inStock} />
-            <SingleProductDynamicFields product={product} />
-            <div className="flex flex-col gap-y-2 max-[500px]:items-center">
-             
-              <p className="text-lg">
-                SKU: <span className="ml-1">abccd-18</span>
-              </p>
-              <div className="text-lg flex gap-x-2">
-                <span>Share:</span>
-                <div className="flex items-center gap-x-1 text-2xl">
-                  <FaSquareFacebook />
-                  <FaSquareXTwitter />
-                  <FaSquarePinterest />
-                </div>
+            {images && images.length > 0 && (
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {images.map((imageItem: ImageItem, key: number) => (
+                  <button
+                    key={imageItem.imageID + key}
+                    className="flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-gray-200 hover:border-gray-900 transition-colors"
+                  >
+                    <Image
+                      src={imageItem.image}
+                      width={80}
+                      height={80}
+                      alt="Product thumbnail"
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                ))}
               </div>
-              <div className="flex gap-x-2">
-                <Image
-                  src="/visa.svg"
-                  width={50}
-                  height={50}
-                  alt="visa icon"
-                  className="w-auto h-auto"
-                />
-                <Image
-                  src="/mastercard.svg"
-                  width={50}
-                  height={50}
-                  alt="mastercard icon"
-                  className="h-auto w-auto"
-                />
-                <Image
-                  src="/ae.svg"
-                  width={50}
-                  height={50}
-                  alt="americal express icon"
-                  className="h-auto w-auto"
-                />
-                <Image
-                  src="/paypal.svg"
-                  width={50}
-                  height={50}
-                  alt="paypal icon"
-                  className="w-auto h-auto"
-                />
-                <Image
-                  src="/dinersclub.svg"
-                  width={50}
-                  height={50}
-                  alt="diners club icon"
-                  className="h-auto w-auto"
-                />
-                <Image
-                  src="/discover.svg"
-                  width={50}
-                  height={50}
-                  alt="discover icon"
-                  className="h-auto w-auto"
-                />
+            )}
+          </div>
+
+          {/* Product Details */}
+          <div className="space-y-6">
+            {/* Title & Price */}
+            <div>
+              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-3">
+                {sanitize(product?.title)}
+              </h1>
+              <p className="text-3xl font-bold text-gray-900">
+                ${formatPrice(product?.price)}
+              </p>
+            </div>
+
+            {/* Stock */}
+            <StockAvailabillity stock={94} inStock={product?.inStock} />
+
+            {/* Dynamic Fields (Quantity, Add to Cart, Buy Now) */}
+            <SingleProductDynamicFields product={product} />
+
+            {/* SKU */}
+            <div className="pt-6 border-t border-gray-100">
+              <p className="text-sm text-gray-500">
+                SKU: <span className="font-medium text-gray-900">PROD-{product?.id?.slice(0, 8) || "00000000"}</span>
+              </p>
+            </div>
+
+            {/* Share */}
+            <div>
+              <p className="text-sm text-gray-500 mb-3">Share:</p>
+              <div className="flex gap-3">
+                <a href="#" className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center text-gray-600 transition-colors">
+                  <FaFacebook className="w-5 h-5" />
+                </a>
+                <a href="#" className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center text-gray-600 transition-colors">
+                  <FaTwitter className="w-5 h-5" />
+                </a>
+                <a href="#" className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center text-gray-600 transition-colors">
+                  <FaPinterest className="w-5 h-5" />
+                </a>
+              </div>
+            </div>
+
+            {/* Payment Methods */}
+            <div>
+              <p className="text-sm text-gray-500 mb-3">Secure Payment:</p>
+              <div className="flex items-center gap-2">
+                <div className="px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                  <Image src="/visa.svg" width={40} height={25} alt="Visa" className="h-4 w-auto" />
+                </div>
+                <div className="px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                  <Image src="/mastercard.svg" width={40} height={25} alt="Mastercard" className="h-4 w-auto" />
+                </div>
+                <div className="px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                  <Image src="/paypal.svg" width={40} height={25} alt="PayPal" className="h-4 w-auto" />
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <div className="py-16">
+
+        {/* Product Tabs */}
+        <div className="mt-16">
           <ProductTabs product={product} />
         </div>
       </div>
