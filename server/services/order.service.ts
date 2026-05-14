@@ -97,12 +97,12 @@ function deriveParentOrderStatus(subOrderStatuses: string[]): string {
 // ============================================
 
 /**
- * Create customer order with sub-order splitting
- * Main flow:
- * 1. Validate product information (stock, price, merchant)
- * 2. Group products by merchant
- * 3. Create parent order + sub-orders + product snapshots in a transaction
- * 4. Decrease stock
+ * Create a customer order, split it into per-seller sub-orders, persist product snapshots, decrement inventory, and apply vouchers.
+ *
+ * Performs validation of input items, merges duplicate product entries, verifies stock and prices against the database, groups items by seller, applies vouchers, and creates a parent order plus one sub-order per seller inside a single database transaction. Voucher usage is recorded and product inventory is decremented atomically; if any inventory decrement does not affect exactly one row the transaction fails and an error is thrown.
+ *
+ * @param input - Order creation input including customer/billing fields, `items` (cart lines), and optional `voucherCodes`
+ * @returns The created order summary including `orderId`, `total`, `subTotal`, `shippingTotal`, `discountTotal`, `subOrderCount`, `message`, and optional `subOrders`
  */
 export async function createCustomerOrder(
   input: CreateCustomerOrderInput
@@ -383,7 +383,13 @@ export async function createCustomerOrder(
 }
 
 /**
- * Validate and apply vouchers
+ * Validates voucher codes and computes the total discount and which vouchers were applied.
+ *
+ * @param voucherCodes - Array of voucher codes to evaluate (case-insensitive)
+ * @param userId - Identifier of the user attempting to apply the vouchers; used for per-user limits
+ * @param orderTotal - Order total used to evaluate minimum-order and percentage-based discounts
+ * @param _sellerGroups - Unused placeholder for seller grouping context
+ * @returns An object containing `totalDiscount` (sum of all applied discounts) and `applied` (array of `{ code, discount }` for each applied voucher)
  */
 async function applyVouchers(
   voucherCodes: string[],
@@ -437,7 +443,13 @@ async function applyVouchers(
 
 // ============================================
 // Query functions
-// ============================================
+/**
+ * Fetches orders for the given customer email, including each order's items and payments.
+ *
+ * @param customerId - The customer's email used to look up orders
+ * @returns An object with an `orders` array; each order includes `items` (with `product` id/slug/mainImage and `seller` id/email) and `payments`
+ * @throws If `customerId` is falsy
+ */
 
 export async function listCustomerOrders(customerId: string): Promise<ListCustomerOrdersResult> {
   if (!customerId) {

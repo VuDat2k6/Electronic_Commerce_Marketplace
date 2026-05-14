@@ -2,6 +2,11 @@ const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
 
+/**
+ * Seed the database with default categories, users, and products.
+ *
+ * Ensures four categories, three test users (admin, seller, buyer) with predefined metadata, and eight sample products exist by inserting or updating records as needed for initial development or testing.
+ */
 async function main() {
   console.log("Seeding database...");
 

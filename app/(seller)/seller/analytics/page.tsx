@@ -34,6 +34,15 @@ const formatCurrency = (cents: number) => {
   }).format(cents / 100);
 };
 
+/**
+ * Displays the seller analytics dashboard and fetches the current seller's analytics data.
+ *
+ * Renders summary statistic cards, recent revenue and order-status breakdowns, a 30-day revenue bar chart,
+ * and a best-selling products list. While data is loading it shows a centered loading message; if no data is
+ * available it shows a "No data available" notice.
+ *
+ * @returns The seller analytics dashboard as a JSX element
+ */
 export default function SellerAnalyticsPage() {
   const { data: session, status } = useSession();
   const [data, setData] = useState<AnalyticsData | null>(null);

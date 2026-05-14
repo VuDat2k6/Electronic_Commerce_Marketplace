@@ -5,6 +5,15 @@ import Link from "next/link";
 import apiClient from "@/lib/api";
 import toast from "react-hot-toast";
 
+/**
+ * Render the authenticated seller's product management page with controls to add, edit, and delete products.
+ *
+ * The component loads the current seller's products, displays a table with product details and stock badges,
+ * shows a loading state and an empty-state message when appropriate, and provides an "Add Product" link.
+ * It performs network requests to fetch and delete products and shows toast notifications for success or failure.
+ *
+ * @returns The JSX element for the seller's product management page
+ */
 export default function SellerProductsPage() {
   const { data: session } = useSession();
   const [products, setProducts] = useState<Product[]>([]);

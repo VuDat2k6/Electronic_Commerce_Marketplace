@@ -369,13 +369,10 @@ async function deleteCustomerOrder(request, response) {
 }
 
 /**
- * GET /api/orders/:id
- * 
- * Retrieves a single order by ID
- * Used for order detail pages
- * 
- * @param {Request} request - Express request with order ID
- * @param {Response} response - Express response object
+ * Retrieve a single customer order by ID for order detail pages.
+ *
+ * Validates the path `id`; responds with 400 if `id` is missing/invalid,
+ * 404 if the order does not exist, 200 with the selected order fields (including nested item fields) on success, or 500 on unexpected errors.
  */
 async function getCustomerOrder(request, response) {
   try {
@@ -437,14 +434,13 @@ async function getCustomerOrder(request, response) {
 }
 
 /**
- * GET /api/orders
- * 
- * Retrieves all orders with pagination
- * Supports page and limit query parameters
- * Ordered by most recent first
- * 
- * @param {Request} request - Express request with optional pagination params
- * @param {Response} response - Express response object
+ * List customer orders with pagination and per-order item counts.
+ *
+ * Accepts optional `page` and `limit` query parameters (defaults: page=1, limit=50).
+ * Validates that `page >= 1` and `1 <= limit <= 100`, returns a 400 response for invalid pagination.
+ * Orders are returned newest-first (by `dateTime`) and each order includes a count of its `items`.
+ * Responds with pagination metadata: `page`, `limit`, `total`, and `totalPages`.
+ * Returns a 500 response on unexpected server errors.
  */
 async function getAllOrders(request, response) {
   try {

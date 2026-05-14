@@ -7,6 +7,15 @@ interface BadgeProps {
   className?: string;
 }
 
+/**
+ * Renders a pill-style badge as a <span> with configurable visual variant and size.
+ *
+ * @param children - Content displayed inside the badge.
+ * @param variant - Visual style key; one of "default", "success", "warning", "danger", "info", "purple", "cyan", "pink". Defaults to "default".
+ * @param size - Size key; one of "sm" or "md". Defaults to "md".
+ * @param className - Additional CSS classes to apply to the badge container.
+ * @returns A JSX <span> element styled as a badge.
+ */
 export function Badge({ children, variant = "default", size = "md", className = "" }: BadgeProps) {
   const variants = {
     default: "bg-zinc-100 text-zinc-700",
@@ -38,6 +47,14 @@ export function Badge({ children, variant = "default", size = "md", className = 
   );
 }
 
+/**
+ * Render a badge representing the provided status string.
+ *
+ * The function maps known status codes to a styled variant and human-readable label.
+ *
+ * @param status - The status code to display (e.g., `"PENDING"`, `"CONFIRMED"`, `"DELIVERED"`). Known codes are mapped to predefined variants and labels; unknown values are shown as the label with the default variant.
+ * @returns A `Badge` element configured with a variant and label corresponding to `status`.
+ */
 export function StatusBadge({ status }: { status: string }) {
   const statusMap: Record<string, { variant: BadgeProps["variant"]; label: string }> = {
     PENDING: { variant: "warning", label: "Pending" },

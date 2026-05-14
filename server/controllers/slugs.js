@@ -1,4 +1,8 @@
-const prisma = require("../utills/db"); // ✅ Use shared connection
+const prisma = require("../utills/db"); /**
+ * Handle a request for a product identified by its slug and return the product including its category.
+ *
+ * Validates the `slug` route parameter (must be a string of length ≤ 200). Responds with 400 and `{ error: "Invalid slug" }` for invalid input, 404 and `{ error: "Product not found" }` if no matching product exists, or 200 with the product object (including its `category`) on success.
+ */
 
 async function getProductBySlug(request, response) {
   const { slug } = request.params;
@@ -23,13 +27,12 @@ async function getProductBySlug(request, response) {
 }
 
 /**
- * GET /api/slugs/bulk?slugs=slug1,slug2,slug3
+ * Fetch products for a comma-separated list of slugs and respond with matching products and a count.
  *
- * Fetches multiple products by slugs in a single query
- * Optimized for wishlist page to avoid N+1 API calls
- *
- * @param {Request} request - Express request with comma-separated slugs query param
- * @param {Response} response - Express response with array of products
+ * Expects a `slugs` query parameter (string). If missing or not a string, responds with HTTP 400 and `{ error: "Slugs parameter is required" }`.
+ * Parses `slugs` by splitting on commas, trimming entries, discarding empty values and entries longer than 200 characters, and limits to at most 50 slugs.
+ * If no valid slugs remain, responds with `{ products: [], count: 0 }`. Otherwise queries for all matching products and responds with `{ products, count }`.
+ * Each returned product includes its `category` with `id` and `name`.
  */
 async function getProductsBySlugs(request, response) {
   const { slugs } = request.query;

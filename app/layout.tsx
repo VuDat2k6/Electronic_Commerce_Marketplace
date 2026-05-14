@@ -17,6 +17,12 @@ export const metadata: Metadata = {
   description: "Your trusted electronics e-commerce shop",
 };
 
+/**
+ * Provides the application's root HTML layout, wrapping page content with session state and global UI components.
+ *
+ * @param children - Page content to render inside the global providers and layout
+ * @returns The top-level HTML element containing global providers, header, footer, progress bar, and the rendered `children`
+ */
 export default async function RootLayout({
   children,
 }: Readonly<{

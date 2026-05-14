@@ -30,6 +30,15 @@ const STATUS_CONFIG: Record<string, { color: string; icon: React.ElementType }> 
   canceled: { color: "bg-red-100 text-red-800 border-red-200", icon: AlertCircle },
 };
 
+/**
+ * Client-side page that fetches and displays the current seller's orders and provides UI to update each order's status.
+ *
+ * Renders a loading state while fetching, an empty-state when there are no orders, and a table of orders otherwise.
+ * The component reads the seller ID from the session, fetches orders from the seller API, shows success/error toasts,
+ * and disables the per-row status control while an update is in progress.
+ *
+ * @returns The React element for the seller orders page.
+ */
 export default function SellerOrdersPage() {
   const { data: session } = useSession();
   const [items, setItems] = useState<OrderItem[]>([]);

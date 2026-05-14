@@ -1,5 +1,17 @@
 const prisma = require("../utills/db");
 
+/**
+ * Search published products by a user-supplied query across title, description, and manufacturer.
+ *
+ * Validates and sanitizes `request.query.query` (must be a string, trimmed, truncated to 200 characters,
+ * and at least 2 characters long), queries up to 50 published products matching the sanitized query,
+ * and responds with a JSON object containing `products`, `count`, and the sanitized `query`.
+ *
+ * Responds with HTTP 400 when the query is missing or shorter than 2 characters, and with HTTP 500 on server errors.
+ *
+ * @param {import('express').Request} request - Express request; reads `request.query.query` for the search term.
+ * @param {import('express').Response} response - Express response used to send JSON results or error responses.
+ */
 async function searchProducts(request, response) {
     try {
         const { query } = request.query;

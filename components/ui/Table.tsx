@@ -15,6 +15,16 @@ interface TableProps<T> {
   emptyMessage?: string;
 }
 
+/**
+ * Render a reusable table from provided column definitions and row data.
+ *
+ * Renders a horizontally scrollable table with a header generated from `columns`
+ * and one row per item in `data`. If `data` is empty, renders a centered
+ * empty-state block showing `emptyMessage`.
+ *
+ * @param emptyMessage - Message shown when `data` is empty (defaults to `"No data available"`)
+ * @returns The table JSX; when `data` is empty, a centered empty-state block displaying `emptyMessage`
+ */
 export function Table<T extends Record<string, any>>({ columns, data, emptyMessage = "No data available" }: TableProps<T>) {
   if (data.length === 0) {
     return (

@@ -126,7 +126,11 @@ class ErrorBoundary extends Component<Props, State> {
 
 export default ErrorBoundary;
 
-// Hook version for functional components
+/**
+ * Provides a setter that captures an `Error` and causes it to be thrown on the next render to trigger the nearest React error boundary.
+ *
+ * @returns A state setter function; calling it with an `Error` will cause that error to be thrown on the next render, triggering the nearest React error boundary.
+ */
 export function useErrorHandler() {
   const [error, setError] = React.useState<Error | null>(null);
 

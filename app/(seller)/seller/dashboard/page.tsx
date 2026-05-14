@@ -75,6 +75,13 @@ const formatPrice = (price: number) => {
   return `$${(price / 100).toFixed(2)}`;
 };
 
+/**
+ * Render the seller dashboard page with store overview, metric cards, quick actions, recent orders, and analytics preview.
+ *
+ * The component fetches dashboard statistics for the current session user, displays a full-screen loading spinner while data is loading, and falls back to sensible defaults when stats are unavailable.
+ *
+ * @returns The rendered dashboard JSX element
+ */
 export default function SellerDashboardPage() {
   const { data: session } = useSession();
   const [stats, setStats] = useState<DashboardStats | null>(null);

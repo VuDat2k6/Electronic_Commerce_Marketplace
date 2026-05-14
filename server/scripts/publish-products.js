@@ -1,6 +1,9 @@
 const { PrismaClient } = require("@prisma/client");
 const p = new PrismaClient();
 
+/**
+ * Update all products with status "DRAFT" to "PUBLISHED" and log how many were changed.
+ */
 async function main() {
   const result = await p.product.updateMany({
     where: { status: "DRAFT" },

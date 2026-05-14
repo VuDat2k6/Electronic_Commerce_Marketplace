@@ -32,6 +32,15 @@ const pageVariants = {
   },
 };
 
+/**
+ * Wraps page content to animate transitions when the route (pathname) changes.
+ *
+ * Keys the animated wrapper by the current pathname so the wrapper remounts on navigation
+ * and applies the `pageVariants` enter/exit/initial animation states.
+ *
+ * @param children - The page content to be animated during route transitions
+ * @returns The children wrapped in a motion-enabled container that animates on pathname change
+ */
 export function PageTransition({ children }: PageTransitionProps) {
   const pathname = usePathname();
 
@@ -59,6 +68,16 @@ interface FadeInSectionProps {
   className?: string;
 }
 
+/**
+ * Reveals content with a configurable fade-and-slide animation when it enters the viewport.
+ *
+ * @param children - Content to animate into view
+ * @param direction - Entry direction: `"up"`, `"down"`, `"left"`, `"right"`, or `"none"` (no translation)
+ * @param delay - Seconds to wait before the animation starts
+ * @param duration - Animation duration in seconds
+ * @param className - CSS class names applied to the wrapper element
+ * @returns A motion-enabled wrapper that animates its children to `opacity: 1` and `x/y: 0` when scrolled into view
+ */
 export function FadeInSection({
   children,
   direction = "up",
@@ -98,6 +117,13 @@ interface StaggerContainerProps {
   className?: string;
 }
 
+/**
+ * Renders a motion wrapper that reveals its children with a staggered entrance when the container enters the viewport.
+ *
+ * @param staggerDelay - Delay in seconds between the start times of each child's animation
+ * @param className - Additional CSS class names applied to the wrapper
+ * @returns A motion-enabled div that animates its children using a staggered reveal when scrolled into view
+ */
 export function StaggerContainer({
   children,
   staggerDelay = 0.1,
@@ -133,6 +159,13 @@ interface StaggerItemProps {
   className?: string;
 }
 
+/**
+ * Animates a single child to participate in a parent staggered reveal.
+ *
+ * @param children - Element(s) to animate
+ * @param className - Optional additional CSS class names applied to the wrapper
+ * @returns A motion.div that applies the staggered enter animation to `children`
+ */
 export function StaggerItem({ children, className = "" }: StaggerItemProps) {
   const itemVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -161,6 +194,13 @@ interface ScaleInProps {
   className?: string;
 }
 
+/**
+ * Animates mounting and unmounting of its children with a combined scale and fade effect.
+ *
+ * @param isOpen - Controls whether the animated wrapper (and its children) is mounted; defaults to `true`.
+ * @param className - Optional CSS class applied to the animated wrapper.
+ * @returns The animated wrapper element that mounts `children` when `isOpen` is true.
+ */
 export function ScaleIn({
   children,
   isOpen = true,
@@ -191,6 +231,15 @@ interface SlideInProps {
   className?: string;
 }
 
+/**
+ * Animates its children sliding in and out from a chosen edge.
+ *
+ * @param children - Content to render inside the sliding container
+ * @param direction - Edge from which the content will enter and exit: `"left"`, `"right"`, `"top"`, or `"bottom"`
+ * @param isOpen - Controls whether the sliding container is mounted and visible
+ * @param className - CSS classes applied to the animated wrapper
+ * @returns A motion-enabled wrapper element that mounts when `isOpen` is truthy and applies slide-in/out animations from `direction`
+ */
 export function SlideIn({
   children,
   direction = "right",

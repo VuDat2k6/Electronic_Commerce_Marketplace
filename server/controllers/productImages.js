@@ -1,5 +1,12 @@
 const prisma = require("../utills/db");
 
+/**
+ * Fetches and sends all image records for the product identified by `request.params.id`.
+ *
+ * Sends a 404 response with `{ error: "Images not found" }` when no images exist for the product; otherwise sends the images array as JSON.
+ * @param {import('express').Request} request - Express request; expects `request.params.id` to contain the product ID.
+ * @param {import('express').Response} response - Express response used to send the result.
+ */
 async function getSingleProductImages(request, response) {
   const { id } = request.params;
   const images = await prisma.image.findMany({

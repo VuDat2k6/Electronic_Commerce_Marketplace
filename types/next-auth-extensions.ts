@@ -33,17 +33,32 @@ export type SessionUser = {
   image?: string | null;
 };
 
-// Helper function to safely get user id from session
+/**
+ * Retrieve the user's id from a NextAuth session object.
+ *
+ * @param session - NextAuth `Session` (or any object) that may contain `user.id`
+ * @returns The `user.id` string if present, `undefined` otherwise
+ */
 export function getSessionUserId(session: any): string | undefined {
   return session?.user?.id;
 }
 
-// Helper function to check if user is admin
+/**
+ * Determine whether the session's user has the "admin" role.
+ *
+ * @param session - A Session-like object (expected to have `user.role`)
+ * @returns `true` if `session.user.role` equals `"admin"`, `false` otherwise
+ */
 export function isAdmin(session: any): boolean {
   return session?.user?.role === "admin";
 }
 
-// Helper function to check if user is seller
+/**
+ * Determines whether the session's user has the "seller" role.
+ *
+ * @param session - Session object that may contain `user.role`
+ * @returns `true` if `session.user.role` equals `"seller"`, `false` otherwise
+ */
 export function isSeller(session: any): boolean {
   return session?.user?.role === "seller";
 }

@@ -13,9 +13,15 @@ try {
 }
 
 /**
- * Create customer order with Order_item records
- * @param {Object} orderData - Order data
- * @returns {Promise<Object>} Created order object
+ * Create a customer order and corresponding order_item records grouped by seller, decrement product stock, and apply voucher usage.
+ *
+ * Expects an `orderData` object containing buyer details and order contents. Relevant fields:
+ * - `customerId`, `name`, `lastname`, `phone`, `email`, `company`, `adress`, `apartment`, `postalCode`, `city`, `country`, `orderNotice`
+ * - `items` (array of items with `productId`/`id`, optional `sellerId`, `quantity`, optional `unitPrice`)
+ * - `voucherCodes` (array of voucher code strings)
+ *
+ * @param {Object} orderData - Order payload with buyer info, items, and optional voucher codes.
+ * @returns {Object} The created `customer_order` record.
  */
 async function createCustomerOrder(orderData) {
   const {
@@ -142,9 +148,16 @@ async function createCustomerOrder(orderData) {
 }
 
 /**
- * Get customer order list
- * @param {string} customerId - Customer ID
- * @returns {Promise<Object>} Order list with items
+ * Retrieve a customer's orders (including order items, product and seller details, and payments) by customer ID.
+ * @param {string} customerId - The customer's user ID.
+ * @returns {Object} An object with `orders` and `pagination`.
+ *   - `orders`: Array of `customer_order` records. Each order includes:
+ *       - `items`: Array of `order_item` records; each item includes:
+ *           - `product`: `{ id, title, slug, mainImage, price }`
+ *           - `seller`: `{ id, shopName, shopStatus }`
+ *       - `payments`: Array of payment records: `{ id, status, amount, method, paidAt }`
+ *   - `pagination`: `{ page, limit, total, totalPages }`
+ * @throws {Error} If `customerId` is not provided.
  */
 async function listCustomerOrders(customerId) {
   if (!customerId) {
@@ -220,10 +233,14 @@ async function listCustomerOrders(customerId) {
 }
 
 /**
- * Get seller order items list (aggregated by order)
- * @param {string} sellerId - Seller ID
- * @param {Object} options - Query options
- * @returns {Promise<Object>} Order items list grouped by order
+ * Retrieve a seller's order items grouped by their parent orders.
+ *
+ * @param {string} sellerId - The seller's unique identifier.
+ * @param {Object} [options] - Query options.
+ * @param {string} [options.status] - If provided, only include orders whose parent order's status matches this value (case-insensitive).
+ * @param {number|string} [options.page=1] - Page number for pagination.
+ * @param {number|string} [options.limit=20] - Number of items per page.
+ * @returns {Object} An object containing `orders` (array of groups where each group has `order`, `items` and `totalRevenue`) and `pagination` (`page`, `limit`, `total`, `totalPages`).
  */
 async function listSellerOrderItems(sellerId, options = {}) {
   const status = options.status;
@@ -318,10 +335,11 @@ async function listSellerOrderItems(sellerId, options = {}) {
 }
 
 /**
- * Update order item status (marks order as shipped/delivered/cancelled)
- * @param {string} itemId - Order item ID
- * @param {Object} data - Update payload
- * @returns {Promise<Object>} Updated order
+ * Update the parent customer order's status based on an order item.
+ * @param {string} itemId - ID of the order_item used to identify the parent order.
+ * @param {Object} data - Update payload containing the new status.
+ * @param {string} data.status - New status to set on the parent customer order.
+ * @returns {Object} The updated customer order.
  */
 async function updateOrderItemStatus(itemId, data) {
   const { status } = data;
@@ -345,9 +363,13 @@ async function updateOrderItemStatus(itemId, data) {
 }
 
 /**
- * Get seller shop info and their products
- * @param {string} sellerId - Seller ID (same as User ID)
- * @returns {Promise<Object>} Seller shop data
+ * Retrieve the seller's shop profile and published products.
+ *
+ * @param {string} sellerId - Seller's user ID; required.
+ * @returns {Object} An object with:
+ *  - `seller`: seller profile containing `id`, `shopName`, `description`, `phone`, `address`, `status`, `rating` (one decimal), and `totalProducts`.
+ *  - `products`: array of the seller's published product records, each including `category` and `reviews`.
+ * @throws {Error} If `sellerId` is missing or the seller is not found or not active.
  */
 async function getSellerShop(sellerId) {
   if (!sellerId) {
