@@ -81,6 +81,7 @@ export const CartModule = () => {
             {/* Nút xóa toàn bộ giỏ hàng */}
             <div className="flex justify-end mb-4">
               <button
+                type="button"
                 onClick={handleClearCart}
                 className="text-sm text-red-600 hover:text-red-800 hover:underline"
               >

@@ -10,10 +10,10 @@ const demoMerchant = [
     phone: "1234567890",
     address: "123 Demo St, Demo City, DM 12345",
     status: "active",
-    createdAt : new Date(),
-    updatedAt : new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
   }
-]
+];
 
 const demoProducts = [
   {
@@ -213,7 +213,6 @@ const demoProducts = [
   }
 ];
 
-
 const demoCategories = [
   {
     id: "7a241318-624f-48f7-9921-1818f6c20d85",
@@ -268,37 +267,64 @@ const demoCategories = [
     name: "mouses"
   },
   {
-    id: "ss6412b4-22fd-4fbb-9741-d77580dfdcd2",
+    id: "aa6412b4-22fd-4fbb-9741-d77580dfdcd2",
     name: "computers"
   },
   {
-    id: "fs6412b4-22fd-4fbb-9741-d77512dfdfa3",
+    id: "fa6412b4-22fd-4fbb-9741-d77512dfdfa3",
     name: "printers"
   }
 ];
 
 async function insertDemoData() {
+  await prisma.$transaction(async (tx) => {
+    for (const merchant of demoMerchant) {
+      await tx.merchant.upsert({
+        where: { id: merchant.id },
+        update: {
+          name: merchant.name,
+          description: merchant.description,
+          phone: merchant.phone,
+          address: merchant.address,
+          status: merchant.status,
+          updatedAt: new Date(),
+        },
+        create: merchant,
+      });
+    }
+    console.log("Demo merchant inserted successfully!");
 
-  for (const merchant of demoMerchant) {
-    await prisma.merchant.create({
-      data: merchant,
-    });
-  }
-  console.log("Demo merchant inserted successfully!");
+    for (const category of demoCategories) {
+      await tx.category.upsert({
+        where: { id: category.id },
+        update: {
+          name: category.name,
+        },
+        create: category,
+      });
+    }
+    console.log("Demo categories inserted successfully!");
 
-  for (const category of demoCategories) {
-    await prisma.category.create({
-      data: category,
-    });
-  }
-  console.log("Demo categories inserted successfully!");
-
-  for (const product of demoProducts) {
-    await prisma.product.create({
-      data: product,
-    });
-  }
-  console.log("Demo products inserted successfully!");
+    for (const product of demoProducts) {
+      await tx.product.upsert({
+        where: { id: product.id },
+        update: {
+          title: product.title,
+          price: product.price,
+          rating: product.rating,
+          description: product.description,
+          mainImage: product.mainImage,
+          slug: product.slug,
+          manufacturer: product.manufacturer,
+          categoryId: product.categoryId,
+          inStock: product.inStock,
+          merchantId: product.merchantId,
+        },
+        create: product,
+      });
+    }
+    console.log("Demo products inserted successfully!");
+  });
 }
 
 insertDemoData()

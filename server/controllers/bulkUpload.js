@@ -207,6 +207,12 @@ const deleteBatch = asyncHandler(async (req, res) => {
       const productIds = items.map((i) => i.productId).filter(Boolean);
       console.log(`🗑️ Deleting ${productIds.length} products`);
 
+      // Delete bulk_upload_items first to avoid foreign key constraint errors
+      const deletedItems = await tx.bulk_upload_item.deleteMany({
+        where: { batchId },
+      });
+      console.log(`✅ Deleted ${deletedItems.count} items`);
+
       if (productIds.length > 0) {
         // Delete products
         const deletedProducts = await tx.product.deleteMany({
@@ -214,12 +220,6 @@ const deleteBatch = asyncHandler(async (req, res) => {
         });
         console.log(`✅ Deleted ${deletedProducts.count} products`);
       }
-
-      // Delete bulk_upload_items (cascade will handle this, but explicit is better)
-      const deletedItems = await tx.bulk_upload_item.deleteMany({
-        where: { batchId },
-      });
-      console.log(`✅ Deleted ${deletedItems.count} items`);
 
       // Delete batch
       await tx.bulk_upload_batch.delete({

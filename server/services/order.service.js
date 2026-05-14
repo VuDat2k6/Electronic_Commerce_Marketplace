@@ -1,9 +1,9 @@
 // ============================================
-// 订单服务 - 处理多商户订单创建和查询
+// Order Service - Handle multi-merchant order creation and queries
 // ============================================
 const { PrismaClient } = require("@prisma/client");
 
-// 使用共享的 Prisma 客户端实例
+// Use shared Prisma client instance
 let prisma;
 try {
   prisma = require("../utills/db");
@@ -12,9 +12,9 @@ try {
 }
 
 /**
- * 创建客户订单（支持多商户拆分）
- * @param {Object} orderData - 订单数据
- * @returns {Promise<Object>} 创建的订单对象
+ * Create customer order (supports multi-merchant split orders)
+ * @param {Object} orderData - Order data
+ * @returns {Promise<Object>} Created order object
  */
 async function createCustomerOrder(orderData) {
   const {
@@ -34,82 +34,84 @@ async function createCustomerOrder(orderData) {
     voucherCodes = []
   } = orderData;
 
-  // 生成唯一订单号
+  // Generate unique order ID
   const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
-  // 按商户ID分组商品
+  // Group items by merchant ID
   const itemsByMerchant = {};
   for (const item of items) {
-    const merchantId = item.merchantId || 'default';
+    const merchantId = item.merchantId || "default";
     if (!itemsByMerchant[merchantId]) {
       itemsByMerchant[merchantId] = [];
     }
     itemsByMerchant[merchantId].push(item);
   }
 
-  // 使用事务创建订单和子订单
+  // Use transaction to create order and sub-orders
   const result = await prisma.$transaction(async (tx) => {
-    // 1. 创建主订单
+    // 1. Create parent order
     const customerOrder = await tx.customer_order.create({
       data: {
         id: orderId,
-        name: name || '',
-        lastname: lastname || '',
-        phone: phone || '',
-        email: email || '',
-        company: company || '',
-        adress: adress || '',
-        apartment: apartment || '',
-        postalCode: postalCode || '',
-        city: city || '',
-        country: country || '',
-        orderNotice: orderNotice || '',
-        status: 'PENDING',
-        total: 0, // 将由子订单计算更新
+        name: name || "",
+        lastname: lastname || "",
+        phone: phone || "",
+        email: email || "",
+        company: company || "",
+        adress: adress || "",
+        apartment: apartment || "",
+        postalCode: postalCode || "",
+        city: city || "",
+        country: country || "",
+        orderNotice: orderNotice || "",
+        status: "PENDING",
+        total: 0, // Will be updated after sub-order totals are calculated
         dateTime: new Date()
       }
     });
 
     let totalOrderAmount = 0;
 
-    // 2. 为每个商户创建子订单
+    // 2. Create one sub-order for each merchant
     for (const [merchantId, merchantItems] of Object.entries(itemsByMerchant)) {
-      // 获取商户信息
+      // Get merchant info
       const merchant = await tx.merchant.findUnique({
         where: { id: merchantId }
       }).catch(() => null);
 
-      // 计算子订单小计
+      // Calculate sub-order subtotal
       let subTotal = 0;
       for (const item of merchantItems) {
+        const productId = item.productId || item.id;
         const product = await tx.product.findUnique({
-          where: { id: item.productId }
+          where: { id: productId }
         }).catch(() => null);
-        
+
         if (product) {
           const unitPrice = item.unitPrice || product.price;
           subTotal += unitPrice * item.quantity;
         }
       }
 
-      // 计算运费
+      // Calculate shipping fee
       const shippingFee = merchant?.shippingFee || 0;
 
-      // 创建子订单
+      // Create sub-order
       const subOrder = await tx.subOrder.create({
         data: {
           parentOrderId: customerOrder.id,
           merchantId: merchantId,
-          status: 'PENDING',
+          status: "PENDING",
           subTotal: subTotal,
           shippingTotal: shippingFee
         }
       });
 
-      // 3. 为每个商品创建子订单产品记录
+      // 3. Create sub-order product records
       for (const item of merchantItems) {
+        const productId = item.productId || item.id;
         const product = await tx.product.findUnique({
-          where: { id: item.productId }
+          where: { id: productId }
         });
 
         if (product) {
@@ -122,7 +124,7 @@ async function createCustomerOrder(orderData) {
               productImageSnapshot: product.mainImage,
               unitPriceSnapshot: item.unitPrice || product.price,
               merchantIdSnapshot: product.merchantId,
-              merchantNameSnapshot: merchant?.name || 'Unknown'
+              merchantNameSnapshot: merchant?.name || "Unknown"
             }
           });
         }
@@ -131,13 +133,13 @@ async function createCustomerOrder(orderData) {
       totalOrderAmount += subTotal + shippingFee;
     }
 
-    // 4. 更新主订单总金额
+    // 4. Update parent order total
     const updatedOrder = await tx.customer_order.update({
       where: { id: customerOrder.id },
       data: { total: totalOrderAmount }
     });
 
-    // 5. 处理优惠券（如果提供）
+    // 5. Handle vouchers if provided
     if (voucherCodes && voucherCodes.length > 0) {
       for (const code of voucherCodes) {
         const voucher = await tx.voucher.findUnique({
@@ -145,17 +147,17 @@ async function createCustomerOrder(orderData) {
         }).catch(() => null);
 
         if (voucher && voucher.isActive) {
-          // 记录优惠券使用
+          // Record voucher usage
           await tx.voucherUsage.create({
             data: {
               voucherId: voucher.id,
-              userId: customerId || '',
+              userId: customerId || "",
               orderId: customerOrder.id,
               usedAt: new Date()
             }
           });
 
-          // 更新优惠券已使用次数
+          // Increase voucher used count
           await tx.voucher.update({
             where: { id: voucher.id },
             data: { usedCount: { increment: 1 } }
@@ -171,16 +173,16 @@ async function createCustomerOrder(orderData) {
 }
 
 /**
- * 获取客户的订单列表
- * @param {string} customerId - 客户ID
- * @returns {Promise<Object>} 订单列表
+ * Get customer order list
+ * @param {string} customerId - Customer ID
+ * @returns {Promise<Object>} Order list
  */
 async function listCustomerOrders(customerId) {
   if (!customerId) {
     throw new Error("Customer ID is required");
   }
 
-  // 通过用户邮箱查找订单（因为订单记录的是邮箱而非用户ID）
+  // Find orders by user email because orders store email instead of user ID
   const user = await prisma.user.findUnique({
     where: { id: customerId }
   }).catch(() => null);
@@ -199,7 +201,7 @@ async function listCustomerOrders(customerId) {
 
   const email = user.email;
 
-  // 获取客户的所有订单
+  // Get all customer orders
   const orders = await prisma.customer_order.findMany({
     where: { email: email },
     include: {
@@ -238,14 +240,14 @@ async function listCustomerOrders(customerId) {
       }
     },
     orderBy: {
-      dateTime: 'desc'
+      dateTime: "desc"
     }
   });
 
-  // 计算总金额（子订单小计 + 运费）
-  const enrichedOrders = orders.map(order => ({
+  // Add revenue field to each sub-order
+  const enrichedOrders = orders.map((order) => ({
     ...order,
-    subOrders: order.subOrders.map(subOrder => ({
+    subOrders: order.subOrders.map((subOrder) => ({
       ...subOrder,
       revenue: subOrder.subTotal + subOrder.shippingTotal
     }))
@@ -263,13 +265,15 @@ async function listCustomerOrders(customerId) {
 }
 
 /**
- * 获取卖家的子订单列表
- * @param {string} merchantId - 商户ID
- * @param {Object} options - 查询选项
- * @returns {Promise<Object>} 子订单列表
+ * Get seller sub-order list
+ * @param {string} merchantId - Merchant ID
+ * @param {Object} options - Query options
+ * @returns {Promise<Object>} Sub-order list
  */
 async function listSellerSubOrders(merchantId, options = {}) {
-  const { status, page = 1, limit = 20 } = options;
+  const status = options.status;
+  const page = Number(options.page) || 1;
+  const limit = Number(options.limit) || 20;
 
   if (!merchantId) {
     throw new Error("Merchant ID is required");
@@ -287,7 +291,7 @@ async function listSellerSubOrders(merchantId, options = {}) {
       where,
       skip: offset,
       take: limit,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       include: {
         parentOrder: {
           select: {
@@ -323,8 +327,8 @@ async function listSellerSubOrders(merchantId, options = {}) {
     prisma.subOrder.count({ where })
   ]);
 
-  // 计算每个子订单的收入
-  const enrichedSubOrders = subOrders.map(subOrder => ({
+  // Calculate revenue for each sub-order
+  const enrichedSubOrders = subOrders.map((subOrder) => ({
     ...subOrder,
     revenue: subOrder.subTotal + subOrder.shippingTotal
   }));
@@ -341,10 +345,10 @@ async function listSellerSubOrders(merchantId, options = {}) {
 }
 
 /**
- * 更新子订单状态
- * @param {string} subOrderId - 子订单ID
- * @param {Object} data - 更新数据
- * @returns {Promise<Object>} 更新后的子订单
+ * Update sub-order status
+ * @param {string} subOrderId - Sub-order ID
+ * @param {Object} data - Update payload
+ * @returns {Promise<Object>} Updated sub-order
  */
 async function updateSubOrderStatus(subOrderId, data) {
   const { status, trackingNumber, shippingProvider, cancelReason } = data;
@@ -359,35 +363,35 @@ async function updateSubOrderStatus(subOrderId, data) {
 
   const updateData = { status };
 
-  // 根据状态更新相关时间戳
-  if (status === 'SHIPPED') {
+  // Update related timestamps based on status
+  if (status === "SHIPPED") {
     updateData.shippedAt = new Date();
     if (trackingNumber) updateData.trackingNumber = trackingNumber;
     if (shippingProvider) updateData.shippingProvider = shippingProvider;
   }
-  if (status === 'DELIVERED') {
+  if (status === "DELIVERED") {
     updateData.deliveredAt = new Date();
   }
-  if (status === 'CANCELLED') {
+  if (status === "CANCELLED") {
     updateData.cancelledAt = new Date();
     if (cancelReason) updateData.cancelReason = cancelReason;
   }
 
-  // 更新子订单
+  // Update sub-order
   const updated = await prisma.subOrder.update({
     where: { id: subOrderId },
     data: updateData
   });
 
-  // 重新计算父订单状态
+  // Recalculate parent order status
   await updateParentOrderStatus(subOrder.parentOrderId);
 
   return updated;
 }
 
 /**
- * 更新父订单状态（基于所有子订单状态）
- * @param {string} parentOrderId - 父订单ID
+ * Update parent order status based on all sub-order statuses
+ * @param {string} parentOrderId - Parent order ID
  */
 async function updateParentOrderStatus(parentOrderId) {
   const siblings = await prisma.subOrder.findMany({
@@ -397,17 +401,17 @@ async function updateParentOrderStatus(parentOrderId) {
 
   if (siblings.length === 0) return;
 
-  const allDelivered = siblings.every(s => s.status === 'DELIVERED');
-  const allCancelled = siblings.every(s => s.status === 'CANCELLED');
-  const anyShipped = siblings.some(s => ['SHIPPED', 'DELIVERED'].includes(s));
-  const anyPending = siblings.some(s => ['PENDING', 'CONFIRMED', 'PROCESSING'].includes(s));
-  const anyCancelled = siblings.some(s => s.status === 'CANCELLED');
+  const allDelivered = siblings.every((s) => s.status === "DELIVERED");
+  const allCancelled = siblings.every((s) => s.status === "CANCELLED");
+  const anyShipped = siblings.some((s) => ["SHIPPED", "DELIVERED"].includes(s.status));
+  const anyPending = siblings.some((s) => ["PENDING", "CONFIRMED", "PROCESSING"].includes(s.status));
+  const anyCancelled = siblings.some((s) => s.status === "CANCELLED");
 
-  let parentStatus = 'PROCESSING';
-  if (allDelivered) parentStatus = 'COMPLETED';
-  else if (allCancelled) parentStatus = 'CANCELLED';
-  else if (anyShipped && anyPending) parentStatus = 'PARTIALLY_FULFILLED';
-  else if (anyCancelled) parentStatus = 'PARTIALLY_CANCELLED';
+  let parentStatus = "PROCESSING";
+  if (allDelivered) parentStatus = "COMPLETED";
+  else if (allCancelled) parentStatus = "CANCELLED";
+  else if (anyShipped && anyPending) parentStatus = "PARTIALLY_FULFILLED";
+  else if (anyCancelled) parentStatus = "PARTIALLY_CANCELLED";
 
   await prisma.customer_order.update({
     where: { id: parentOrderId },
@@ -416,9 +420,9 @@ async function updateParentOrderStatus(parentOrderId) {
 }
 
 /**
- * 获取商户店铺信息及其商品
- * @param {string} merchantId - 商户ID
- * @returns {Promise<Object>} 商户店铺信息
+ * Get merchant shop info and its products
+ * @param {string} merchantId - Merchant ID
+ * @returns {Promise<Object>} Merchant shop data
  */
 async function getMerchantShop(merchantId) {
   if (!merchantId) {
@@ -429,7 +433,7 @@ async function getMerchantShop(merchantId) {
     where: { id: merchantId },
     include: {
       products: {
-        where: { status: 'PUBLISHED' },
+        where: { status: "PUBLISHED" },
         include: {
           category: {
             select: { id: true, name: true }
@@ -446,11 +450,12 @@ async function getMerchantShop(merchantId) {
     throw new Error("Merchant not found");
   }
 
-  // 计算平均评分
-  const allRatings = merchant.products.flatMap(p => p.reviews.map(r => r.rating));
-  const averageRating = allRatings.length > 0
-    ? allRatings.reduce((a, b) => a + b, 0) / allRatings.length
-    : 0;
+  // Calculate average rating
+  const allRatings = merchant.products.flatMap((p) => p.reviews.map((r) => r.rating));
+  const averageRating =
+    allRatings.length > 0
+      ? allRatings.reduce((a, b) => a + b, 0) / allRatings.length
+      : 0;
 
   return {
     merchant: {

@@ -41,26 +41,25 @@ const DashboardCreateNewUser = () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(sanitizedUserInput),
         };
-        fetch(`/api/users`, requestOptions)
-          .then((response) => {
-            if(response.status === 201){
-              return response.json();
 
-            }else{
-              
-              throw Error("Error while creating user");
-            }
-          })
-          .then((data) => {
+        try {
+          const response = await fetch(`/api/users`, requestOptions);
+
+          if (response.status === 201) {
+            await response.json();
+
             toast.success("User added successfully");
             setUserInput({
               email: "",
               password: "",
               role: "user",
             });
-          }).catch(error => {
-            toast.error("Error while creating user");
-          });
+          } else {
+            throw Error("Error while creating user");
+          }
+        } catch (error) {
+          toast.error("Error while creating user");
+        }
       } else {
         toast.error("Password must be longer than 7 characters");
       }
@@ -113,7 +112,7 @@ const DashboardCreateNewUser = () => {
             </div>
             <select
               className="select select-bordered"
-              defaultValue={userInput.role}
+              value={userInput.role}
               onChange={(e) =>
                 setUserInput({ ...userInput, role: e.target.value })
               }

@@ -3,7 +3,7 @@
 // *********************
 // Role of the component: Component that displays all orders on admin dashboard page
 // Name of the component: AdminOrders.tsx
-// Developer: Aleksandar Kuzmanovic
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <AdminOrders />
 // Input parameters: No input parameters
@@ -14,16 +14,35 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import apiClient from "@/lib/api";
 
+interface Order {
+  id?: string | number;
+  name?: string;
+  country?: string;
+  status?: string;
+  total?: string | number;
+  dateTime?: string;
+}
+
 const AdminOrders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
 
   useEffect(() => {
     const fetchOrders = async () => {
-      const response = await apiClient.get("/api/orders");
-      const data = await response.json();
-      
-      setOrders(data?.orders);
+      try {
+        const response = await apiClient.get("/api/orders");
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch orders");
+        }
+
+        const data = await response.json();
+        setOrders(data?.orders || []);
+      } catch (error) {
+        console.error("Error fetching orders:", error);
+        setOrders([]);
+      }
     };
+
     fetchOrders();
   }, []);
 
@@ -84,7 +103,7 @@ const AdminOrders = () => {
                     <p>${order?.total}</p>
                   </td>
 
-                  <td>{ new Date(Date.parse(order?.dateTime)).toDateString() }</td>
+                  <td>{new Date(Date.parse(order?.dateTime || "")).toDateString()}</td>
                   <th>
                     <Link
                       href={`/admin/orders/${order?.id}`}

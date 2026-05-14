@@ -25,7 +25,7 @@ async function createSampleNotifications() {
         type: 'ORDER_UPDATE',
         priority: 'HIGH',
         isRead: false,
-        metadata: { orderId: '12345', status: 'shipped' }
+        metadata: JSON.stringify({ orderId: '12345', status: 'shipped' })
       },
       {
         id: nanoid(),
@@ -35,7 +35,7 @@ async function createSampleNotifications() {
         type: 'PAYMENT_STATUS',
         priority: 'HIGH',
         isRead: false,
-        metadata: { amount: 299.99, paymentStatus: 'success' }
+        metadata: JSON.stringify({ amount: 299.99, paymentStatus: 'success' })
       },
       {
         id: nanoid(),
@@ -45,7 +45,7 @@ async function createSampleNotifications() {
         type: 'PROMOTION',
         priority: 'NORMAL',
         isRead: true,
-        metadata: { promoCode: 'SAVE20', discount: 20 }
+        metadata: JSON.stringify({ promoCode: 'SAVE20', discount: 20 })
       },
       {
         id: nanoid(),
@@ -55,7 +55,7 @@ async function createSampleNotifications() {
         type: 'SYSTEM_ALERT',
         priority: 'NORMAL',
         isRead: false,
-        metadata: { maintenanceDate: '2024-01-15' }
+        metadata: JSON.stringify({ maintenanceDate: '2024-01-15' })
       },
       {
         id: nanoid(),
@@ -65,7 +65,7 @@ async function createSampleNotifications() {
         type: 'ORDER_UPDATE',
         priority: 'NORMAL',
         isRead: true,
-        metadata: { orderId: '12344', status: 'confirmed' }
+        metadata: JSON.stringify({ orderId: '12344', status: 'confirmed' })
       },
       {
         id: nanoid(),
@@ -75,13 +75,14 @@ async function createSampleNotifications() {
         type: 'PROMOTION',
         priority: 'NORMAL',
         isRead: false,
-        metadata: { welcomeBonus: true }
+        metadata: JSON.stringify({ welcomeBonus: true })
       }
     ];
 
     // Create notifications using createMany for better performance
     await prisma.notification.createMany({
-      data: notifications
+      data: notifications,
+      skipDuplicates: true
     });
 
     console.log(`Successfully created ${notifications.length} sample notifications!`);

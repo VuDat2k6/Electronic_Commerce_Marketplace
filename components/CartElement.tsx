@@ -1,7 +1,7 @@
 // *********************
 // Role of the component: Cart icon and quantity that will be located in the header
 // Name of the component: CartElement.tsx
-// Developer: Aleksandar Kuzmanovic
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <CartElement />
 // Input parameters: no input parameters

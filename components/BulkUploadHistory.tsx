@@ -1,7 +1,7 @@
 // *********************
 // Role of the component: Display bulk upload batch history
 // Name of the component: BulkUploadHistory.tsx
-// Developer: Custom
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <BulkUploadHistory />
 // Input parameters: no input parameters

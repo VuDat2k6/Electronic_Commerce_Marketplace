@@ -5,12 +5,13 @@ import WishItem from "@/components/WishItem";
 import apiClient from "@/lib/api";
 import { nanoid } from "nanoid";
 import { useSession } from "next-auth/react";
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import toast from "react-hot-toast";
 
 export const WishlistModule = () => {
   const { data: session, status } = useSession();
   const { wishlist, setWishlist, removeFromWishlist } = useWishlistStore();
+  const [userId, setUserId] = useState<string | null>(null);
 
   // Lấy wishlist từ API theo userId
   const getWishlistByUserId = useCallback(async (id: string) => {
@@ -61,6 +62,7 @@ export const WishlistModule = () => {
       const data = await response.json();
 
       if (data?.id) {
+        setUserId(data.id);
         getWishlistByUserId(data.id);
       }
     } catch (error) {
@@ -156,7 +158,7 @@ export const WishlistModule = () => {
                   image={item.image}
                   slug={item.slug}
                   stockAvailabillity={item.stockAvailabillity}
-                  onRemove={() => handleRemoveFromWishlist(item.id)}
+                  onRemove={() => handleRemoveFromWishlist(item.id, userId || undefined)}
                 />
               ))}
             </tbody>

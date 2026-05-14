@@ -1,7 +1,7 @@
 // *********************
 // Role of the component: Color chooser on single product page component
 // Name of the component: ColorInput.tsx
-// Developer: Aleksandar Kuzmanovic
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <ColorInput />
 // Input parameters: no input parameters

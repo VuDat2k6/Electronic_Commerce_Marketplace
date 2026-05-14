@@ -37,6 +37,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ className = "" }) =
     <div className={`relative ${className}`} ref={dropdownRef}>
       {/* Notification Bell Button */}
       <button
+        type="button"
         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
         className="relative p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
         aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ''}`}
@@ -77,6 +78,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ className = "" }) =
               
               {unreadCount > 0 && (
                 <button
+                  type="button"
                   className="flex-1 px-3 py-2 text-sm font-medium text-center text-gray-600 bg-gray-50 border border-gray-200 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 transition-colors"
                   onClick={() => {
                     // TODO: Implement mark all as read functionality

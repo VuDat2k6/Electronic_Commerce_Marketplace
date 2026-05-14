@@ -220,7 +220,6 @@ const demoProductImages = [
   },
 ];
 
-
 const demoCategories = [
   {
     name: "speakers",
@@ -239,9 +238,6 @@ const demoCategories = [
   },
   {
     name: "juicers",
-  },
-  {
-    name: "speakers",
   },
   {
     name: "earbuds",
@@ -265,22 +261,28 @@ const demoCategories = [
 
 async function insertDemoData() {
   for (const product of demoProducts) {
-    await prisma.product.create({
-      data: product,
+    await prisma.product.upsert({
+      where: { id: product.id },
+      update: product,
+      create: product,
     });
   }
   console.log("Demo products inserted successfully!");
 
   for (const image of demoProductImages) {
-    await prisma.image.create({
-      data: image,
+    await prisma.image.upsert({
+      where: { imageID: image.imageID },
+      update: image,
+      create: image,
     });
   }
   console.log("Demo images inserted successfully!");
 
   for (const category of demoCategories) {
-    await prisma.category.create({
-      data: category,
+    await prisma.category.upsert({
+      where: { name: category.name },
+      update: category,
+      create: category,
     });
   }
   console.log("Demo categories inserted successfully!");

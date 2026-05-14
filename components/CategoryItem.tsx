@@ -1,7 +1,7 @@
 // *********************
 // Role of the component: Category Item that will display category icon, category name and link to the category
 // Name of the component: CategoryItem.tsx
-// Developer: Aleksandar Kuzmanovic
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <CategoryItem title={title} href={href} ><Image /></CategoryItem>
 // Input parameters: CategoryItemProps interface

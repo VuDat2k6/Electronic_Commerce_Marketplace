@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { FaTrash, FaShoppingCart, FaHeart } from "react-icons/fa";
 import { SectionTitle } from "@/components";
-import { useWishlistStore, ProductInWishlist } from "@/_zustand/wishlistStore";
+import { useWishlistStore, ProductInWishlist } from "@/app/_zustand/wishlistStore";
 import apiClient from "@/lib/api";
 import toast from "react-hot-toast";
 

@@ -23,11 +23,22 @@ const RegisterPage = () => {
     return emailRegex.test(email);
   };
   
-  const handleSubmit = async (e: any) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const email = e.target[2].value;
-    const password = e.target[3].value;
-    const confirmPassword = e.target[4].value;
+
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+
+    const email = String(formData.get("email") || "");
+    const password = String(formData.get("password") || "");
+    const confirmPassword = String(formData.get("confirmpassword") || "");
+    const acceptedTerms = formData.get("remember-me");
+
+    if (!acceptedTerms) {
+      setError("You must accept our terms and privacy policy");
+      toast.error("You must accept our terms and privacy policy");
+      return;
+    }
 
     if (!isValidEmail(email)) {
       setError("Email is invalid");

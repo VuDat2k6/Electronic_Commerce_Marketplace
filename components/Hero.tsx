@@ -1,7 +1,7 @@
 // *********************
 // Role of the component: Classical hero component on home page
 // Name of the component: Hero.tsx
-// Developer: Aleksandar Kuzmanovic
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <Hero />
 // Input parameters: no input parameters

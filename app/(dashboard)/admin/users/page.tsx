@@ -1,7 +1,6 @@
 "use client";
 import { CustomButton, DashboardSidebar } from "@/components";
 import apiClient from "@/lib/api";
-import { nanoid } from "nanoid";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
 
@@ -10,13 +9,23 @@ const DashboardUsers = () => {
 
   useEffect(() => {
     // sending API request for all users
-    apiClient.get("/api/users")
-      .then((res) => {
-        return res.json();
-      })
-      .then((data) => {
-        setUsers(data);
-      });
+    const fetchUsers = async () => {
+      try {
+        const res = await apiClient.get("/api/users");
+
+        if (!res.ok) {
+          throw new Error("Failed to fetch users");
+        }
+
+        const data = await res.json();
+        setUsers(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        setUsers([]);
+      }
+    };
+
+    fetchUsers();
   }, []);
 
   return (
@@ -55,7 +64,7 @@ const DashboardUsers = () => {
               {/* row 1 */}
               {users &&
                 users.map((user) => (
-                  <tr key={nanoid()}>
+                  <tr key={user?.id?.toString() || user?.email || "unknown-user"}>
                     <th>
                       <label>
                         <input type="checkbox" className="checkbox" />

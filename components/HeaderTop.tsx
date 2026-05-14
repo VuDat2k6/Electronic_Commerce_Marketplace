@@ -1,7 +1,7 @@
 // *********************
 // Role of the component: Topbar of the header
 // Name of the component: HeaderTop.tsx
-// Developer: Aleksandar Kuzmanovic
+// Developer: Vu Dat
 // Version: 1.0
 // Component call: <HeaderTop />
 // Input parameters: no input parameters

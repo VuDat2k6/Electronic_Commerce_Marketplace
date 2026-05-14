@@ -1,6 +1,6 @@
 "use client";
 import { SectionTitle } from "@/components";
-import { useProductStore } from "../flash/store";
+import { useProductStore, ProductInCart } from "@/app/_zustand/store";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -27,6 +27,14 @@ const CheckoutPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { products, total, clearCart } = useProductStore();
   const router = useRouter();
+
+  const shippingAmount = 500; // $5.00 in cents
+  const taxAmount = Math.round(total * 0.05); // 5%
+  const finalTotal = total === 0 ? 0 : total + taxAmount + shippingAmount;
+
+  const formatPrice = (amount: number) => {
+    return (amount / 100).toFixed(2);
+  };
 
   // Add validation functions that match server requirements
   const validateForm = () => {
@@ -156,7 +164,7 @@ const CheckoutPage = () => {
         apartment: checkoutForm.apartment.trim(),
         postalCode: checkoutForm.postalCode.trim(),
         status: "pending",
-        total: total,
+        total: finalTotal,
         city: checkoutForm.city.trim(),
         country: checkoutForm.country.trim(),
         orderNotice: checkoutForm.orderNotice.trim(),
@@ -377,7 +385,7 @@ const CheckoutPage = () => {
                     <p className="text-gray-500">x{product?.amount}</p>
                   </div>
                   <p className="flex-none text-base font-medium">
-                    ${product?.price}
+                    ${formatPrice(product?.price || 0)}
                   </p>
                 </li>
               ))}
@@ -386,20 +394,20 @@ const CheckoutPage = () => {
             <dl className="hidden space-y-6 border-t border-gray-200 pt-6 text-sm font-medium text-gray-900 lg:block">
               <div className="flex items-center justify-between">
                 <dt className="text-gray-600">Subtotal</dt>
-                <dd>${total}</dd>
+                <dd>${formatPrice(total)}</dd>
               </div>
               <div className="flex items-center justify-between">
                 <dt className="text-gray-600">Shipping</dt>
-                <dd>$5</dd>
+                <dd>${formatPrice(shippingAmount)}</dd>
               </div>
               <div className="flex items-center justify-between">
                 <dt className="text-gray-600">Taxes</dt>
-                <dd>${total / 5}</dd>
+                <dd>${formatPrice(taxAmount)}</dd>
               </div>
               <div className="flex items-center justify-between border-t border-gray-200 pt-6">
                 <dt className="text-base">Total</dt>
                 <dd className="text-base">
-                  ${total === 0 ? 0 : Math.round(total + total / 5 + 5)}
+                  ${formatPrice(finalTotal)}
                 </dd>
               </div>
             </dl>

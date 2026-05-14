@@ -100,26 +100,35 @@ marketplace/
 ├── app/                          # Next.js App Router (Frontend)
 │   ├── (auth)/                   # Authentication pages
 │   ├── (main)/                  # Main pages
+│   ├── (dashboard)/              # Admin dashboard group
+│   │   └── admin/              # Admin dashboard pages (users, categories, products, orders, sellers)
+│   ├── (seller)/seller/          # Seller dashboard group (protected, role=seller)
+│   │   ├── dashboard/          # Dashboard & thống kê
+│   │   ├── analytics/          # Phân tích & biểu đồ
+│   │   ├── products/           # Quản lý sản phẩm
+│   │   ├── orders/            # Quản lý đơn hàng
+│   │   ├── vouchers/          # Quản lý voucher
+│   │   ├── bulk-upload/       # Import CSV hàng loạt
+│   │   └── settings/          # Cài đặt shop
 │   ├── account/orders/           # User orders page
-│   ├── admin/                    # Admin dashboard
 │   ├── api/                      # Next.js API routes
 │   │   ├── auth/[...nextauth]/   # NextAuth routes
 │   │   ├── customer-orders/      # Order checkout
-│   │   ├── seller/orders/        # Seller orders
 │   │   └── account/orders/       # Account orders
 │   ├── cart/                     # Cart page
 │   ├── checkout/                 # Checkout page
 │   ├── notifications/            # Notifications page
 │   ├── product/[productSlug]/    # Product detail
 │   ├── search/                   # Search page
+│   ├── seller/[sellerId]/        # Public seller shop page
 │   ├── shop/                     # Shop/category page
-│   ├── seller/                   # Seller dashboard
-│   └── flash/                    # Zustand stores
-│       ├── store.ts             # Cart store (quan trọng)
+│   ├── become-seller/            # Trang đăng ký seller
+│   └── _zustand/                 # Zustand stores 
+│       ├── store.ts             # Cart store
 │       ├── wishlistStore.ts     # Wishlist store
 │       ├── notificationStore.ts  # Notification store
-│       ├── sortStore.ts          # Sort store
-│       └── paginationStore.ts    # Pagination store
+│       ├── sortStore.ts         # Sort store
+│       └── paginationStore.ts   # Pagination store
 ├── components/                   # React components
 │   ├── Header.tsx               # Header navigation
 │   ├── Footer.tsx               # Footer
@@ -2205,12 +2214,13 @@ export function ProductCard({ product }: ProductCardProps) {
 
 | Tính năng | Vị trí file | Mô tả |
 |-----------|------------|--------|
-| Dashboard | `app/seller/dashboard/page.tsx` | Thống kê cửa hàng |
-| Sản phẩm của tôi | `app/seller/products/page.tsx` | Quản lý sản phẩm (Published/Draft/Archived) |
-| Đơn hàng | `app/seller/orders/page.tsx` | Quản lý sub-orders, cập nhật trạng thái |
-| Mã giảm giá | `app/seller/vouchers/page.tsx` | Tạo/sửa/xóa voucher |
-| Cài đặt cửa hàng | `app/seller/shop/page.tsx` | Logo, Banner, thông tin giao hàng |
-| Phân tích | `app/seller/analytics/page.tsx` | Xu hướng bán, biểu đồ, sản phẩm hot |
+| Dashboard | `app/(seller)/seller/dashboard/page.tsx` | Thống kê cửa hàng (tổng sản phẩm, đơn hàng, doanh thu) |
+| Phân tích | `app/(seller)/seller/analytics/page.tsx` | Xu hướng bán, biểu đồ doanh thu 30 ngày, sản phẩm hot |
+| Sản phẩm của tôi | `app/(seller)/seller/products/page.tsx` | Quản lý sản phẩm (CRUD) |
+| Đơn hàng | `app/(seller)/seller/orders/page.tsx` | Quản lý sub-orders, cập nhật trạng thái |
+| Voucher | `app/(seller)/seller/vouchers/page.tsx` | Tạo/sửa/xóa mã giảm giá (PERCENTAGE/FIXED) |
+| Bulk Upload | `app/(seller)/seller/bulk-upload/page.tsx` | Import sản phẩm hàng loạt qua CSV |
+| Cài đặt shop | `app/(seller)/seller/settings/page.tsx` | Thông tin shop (tên, mô tả, số điện thoại, địa chỉ) |
 
 ### 12.4 API Routes (Next.js)
 
@@ -2247,9 +2257,12 @@ export function ProductCard({ product }: ProductCardProps) {
 | `/api/order-product` | GET/POST | Sub-order products |
 | `/api/order-product/:id` | GET/PUT/DELETE | Quản lý sub-order product |
 | `/api/seller/orders` | GET | Sub-orders của seller |
-| `/api/seller/orders/:id` | GET | Chi tiết sub-order |
-| `/api/seller/orders/:id/status` | PUT | Cập nhật trạng thái sub-order |
-| `/api/seller/orders/stats/overview` | GET | Thống kê orders |
+| `/api/seller/orders/:itemId/status` | PATCH | Cập nhật trạng thái sub-order |
+| `/api/seller/settings` | GET/PUT | Lấy/cập nhật thông tin shop |
+| `/api/seller/vouchers` | GET/POST | Lấy/tạo voucher |
+| `/api/seller/vouchers/:id` | PUT/DELETE | Cập nhật/xóa voucher |
+| `/api/seller/analytics/overview` | GET | Phân tích chi tiết: doanh thu 30 ngày, top sản phẩm |
+| `/api/sellers/:sellerId` | GET | Trang công khai của shop |
 
 #### Users & Authentication
 

@@ -6,9 +6,15 @@ const prismaClientSingleton = () => {
         throw new Error('DATABASE_URL environment variable is required');
     }
 
-    // Parse DATABASE_URL to check SSL configuration
     const databaseUrl = process.env.DATABASE_URL;
-    const url = new URL(databaseUrl);
+    let url: URL;
+
+    try {
+        // Parse DATABASE_URL to check SSL configuration
+        url = new URL(databaseUrl);
+    } catch {
+        throw new Error("Invalid DATABASE_URL format");
+    }
     
     // Log SSL configuration for debugging
     if (process.env.NODE_ENV === "development") {

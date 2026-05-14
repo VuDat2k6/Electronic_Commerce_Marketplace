@@ -55,7 +55,8 @@ const DashboardProductDetails = ({ params }: DashboardProductDetailsProps) => {
     if (
       product?.title === "" ||
       product?.slug === "" ||
-      product?.price.toString() === "" ||
+      product?.price === undefined ||
+      product?.price === null ||
       product?.manufacturer === "" ||
       product?.description === ""
     ) {

@@ -1,9 +1,54 @@
+/**
+ * Voucher Controller
+ * 
+ * Handles discount coupon/voucher management:
+ * - Creating vouchers with various discount types
+ * - Validating vouchers during checkout
+ * - Applying discounts to orders
+ * - Managing voucher lifecycle (update, delete)
+ * - Business rules validation (expiry, limits, minimum order)
+ * 
+ * Vouchers can be:
+ * - FIXED: Fixed amount discount (e.g., $10 off)
+ * - PERCENTAGE: Percentage discount (e.g., 20% off)
+ * - Platform-wide: Valid for all products
+ * - Merchant-specific: Only valid for specific merchant's products
+ * 
+ * @module controllers/voucher
+ */
+
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
-// ============================================
-// 创建优惠券（仅管理员）
-// ============================================
+// ============================================================
+// CREATE VOUCHER
+// Creates a new discount voucher with validation
+// ============================================================
+
+/**
+ * POST /api/vouchers
+ * 
+ * Creates a new voucher/coupon
+ * Only admins can create vouchers
+ * 
+ * Request Body:
+ * - code: Unique voucher code (required)
+ * - title: Display title (required)
+ * - description: Voucher description (optional)
+ * - discountType: FIXED or PERCENTAGE (required)
+ * - discountValue: Discount amount (required)
+ * - merchantId: Merchant ID for merchant-specific vouchers (optional)
+ * - minOrderValue: Minimum order amount to use voucher (optional)
+ * - maxDiscount: Maximum discount for percentage vouchers (optional)
+ * - usageLimit: Total number of uses allowed (optional)
+ * - perUserLimit: Uses per user (default: 1)
+ * - startsAt: Start date (default: now)
+ * - expiresAt: Expiry date (required)
+ * - isActive: Active status (default: true)
+ * 
+ * @param {Request} request - Express request with voucher data
+ * @param {Response} response - Express response object
+ */
 async function createVoucher(request, response) {
   try {
     const {
@@ -22,14 +67,15 @@ async function createVoucher(request, response) {
       isActive,
     } = request.body;
 
-    // 校验必填字段
-    if (!code || !title || !discountType || !discountValue || !expiresAt) {
+    // Validate required fields
+    if (!code || !title || !discountType || discountValue === undefined || discountValue === null || !expiresAt) {
       return response.status(400).json({
         error: "Validation failed",
         details: "code, title, discountType, discountValue, and expiresAt are required",
       });
     }
 
+    // Validate discount type enum
     if (!["FIXED", "PERCENTAGE"].includes(discountType)) {
       return response.status(400).json({
         error: "Validation failed",
@@ -37,14 +83,41 @@ async function createVoucher(request, response) {
       });
     }
 
-    if (discountType === "PERCENTAGE" && (discountValue < 1 || discountValue > 100)) {
+    // Validate discount value is positive
+    if (Number(discountValue) <= 0) {
+      return response.status(400).json({
+        error: "Validation failed",
+        details: "discountValue must be greater than 0",
+      });
+    }
+
+    // Validate percentage value is between 1-100
+    if (discountType === "PERCENTAGE" && (Number(discountValue) < 1 || Number(discountValue) > 100)) {
       return response.status(400).json({
         error: "Validation failed",
         details: "For PERCENTAGE type, discountValue must be between 1 and 100",
       });
     }
 
-    // 检查优惠券码是否已存在
+    const parsedStartsAt = startsAt ? new Date(startsAt) : new Date();
+    const parsedExpiresAt = new Date(expiresAt);
+
+    // Validate date values
+    if (Number.isNaN(parsedStartsAt.getTime()) || Number.isNaN(parsedExpiresAt.getTime())) {
+      return response.status(400).json({
+        error: "Validation failed",
+        details: "startsAt and expiresAt must be valid dates",
+      });
+    }
+
+    if (parsedStartsAt >= parsedExpiresAt) {
+      return response.status(400).json({
+        error: "Validation failed",
+        details: "expiresAt must be after startsAt",
+      });
+    }
+
+    // Check for duplicate voucher code
     const existing = await prisma.voucher.findUnique({
       where: { code: code.toUpperCase() },
     });
@@ -56,7 +129,7 @@ async function createVoucher(request, response) {
       });
     }
 
-    // 如果是商户专属券，校验商户存在
+    // Validate merchant exists for merchant-specific vouchers
     if (merchantId) {
       const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
       if (!merchant) {
@@ -64,6 +137,7 @@ async function createVoucher(request, response) {
       }
     }
 
+    // Create voucher
     const voucher = await prisma.voucher.create({
       data: {
         code: code.toUpperCase(),
@@ -76,8 +150,8 @@ async function createVoucher(request, response) {
         maxDiscount: maxDiscount ? parseInt(maxDiscount) : null,
         usageLimit: usageLimit ? parseInt(usageLimit) : null,
         perUserLimit: perUserLimit ? parseInt(perUserLimit) : 1,
-        startsAt: startsAt ? new Date(startsAt) : new Date(),
-        expiresAt: new Date(expiresAt),
+        startsAt: parsedStartsAt,
+        expiresAt: parsedExpiresAt,
         isActive: isActive !== undefined ? isActive : true,
       },
     });
@@ -89,9 +163,25 @@ async function createVoucher(request, response) {
   }
 }
 
-// ============================================
-// 获取优惠券列表
-// ============================================
+// ============================================================
+// GET VOUCHERS
+// Retrieves vouchers with optional filtering
+// ============================================================
+
+/**
+ * GET /api/vouchers
+ * 
+ * Retrieves vouchers with optional filtering by merchant
+ * 
+ * Query Parameters:
+ * - merchantId: Filter by merchant (optional)
+ * - isActive: Filter by active status (optional)
+ * - page: Page number (default: 1)
+ * - limit: Items per page (default: 20)
+ * 
+ * @param {Request} request - Express request with query params
+ * @param {Response} response - Express response with vouchers
+ */
 async function getVouchers(request, response) {
   try {
     const merchantId = request.query.merchantId;
@@ -100,7 +190,7 @@ async function getVouchers(request, response) {
     const limit = parseInt(request.query.limit) || 20;
     const offset = (page - 1) * limit;
 
-    // Get platform-wide vouchers (merchantId = null) OR merchant-specific vouchers
+    // Build filter: platform-wide OR merchant-specific vouchers
     let where;
     if (merchantId) {
       where = {
@@ -113,6 +203,7 @@ async function getVouchers(request, response) {
       where = {};
     }
     
+    // Add active status filter if provided
     if (isActive !== undefined) where.isActive = isActive === "true";
 
     const [vouchers, total] = await Promise.all([
@@ -135,9 +226,25 @@ async function getVouchers(request, response) {
   }
 }
 
-// ============================================
-// 验证优惠券（结账时使用）
-// ============================================
+// ============================================================
+// VALIDATE VOUCHER
+// Checks if a voucher is valid without applying it
+// ============================================================
+
+/**
+ * POST /api/vouchers/validate
+ * 
+ * Validates a voucher without applying it
+ * Used to show discount info before checkout
+ * 
+ * Request Body:
+ * - code: Voucher code
+ * - orderTotal: Current order total
+ * - cartItems: Cart items for merchant-specific voucher validation
+ * 
+ * @param {Request} request - Express request with voucher code
+ * @param {Response} response - Express response with validation result
+ */
 async function validateVoucher(request, response) {
   try {
     const { code, orderTotal, cartItems } = request.body;
@@ -155,6 +262,7 @@ async function validateVoucher(request, response) {
       return response.status(404).json({ error: "Voucher not found" });
     }
 
+    // Validate against business rules
     const validationResult = await validateVoucherBusiness(voucher, orderTotal, cartItems);
 
     return response.json(validationResult);
@@ -164,9 +272,26 @@ async function validateVoucher(request, response) {
   }
 }
 
-// ============================================
-// 应用优惠券（结账时实际扣减）
-// ============================================
+// ============================================================
+// APPLY VOUCHER
+// Applies voucher discount to an order
+// ============================================================
+
+/**
+ * POST /api/vouchers/apply
+ * 
+ * Applies a voucher to an order and calculates discount
+ * Validates voucher before applying
+ * 
+ * Request Body:
+ * - code: Voucher code
+ * - userId: User ID (for per-user limit tracking)
+ * - orderTotal: Current order total
+ * - cartItems: Cart items for merchant-specific validation
+ * 
+ * @param {Request} request - Express request with voucher data
+ * @param {Response} response - Express response with discount info
+ */
 async function applyVoucher(request, response) {
   try {
     const { code, userId, orderTotal, cartItems } = request.body;
@@ -184,6 +309,7 @@ async function applyVoucher(request, response) {
       return response.status(404).json({ error: "Voucher not found" });
     }
 
+    // Validate voucher against business rules
     const validation = await validateVoucherBusiness(voucher, orderTotal, cartItems);
 
     if (!validation.valid) {
@@ -193,6 +319,7 @@ async function applyVoucher(request, response) {
       });
     }
 
+    // Return discount information
     return response.json({
       valid: true,
       voucher: {
@@ -211,9 +338,20 @@ async function applyVoucher(request, response) {
   }
 }
 
-// ============================================
-// 更新优惠券
-// ============================================
+// ============================================================
+// UPDATE VOUCHER
+// Updates voucher properties
+// ============================================================
+
+/**
+ * PUT /api/vouchers/:id
+ * 
+ * Updates an existing voucher's properties
+ * Cannot update usedCount or code through API
+ * 
+ * @param {Request} request - Express request with voucher ID and update data
+ * @param {Response} response - Express response with updated voucher
+ */
 async function updateVoucher(request, response) {
   try {
     const { id } = request.params;
@@ -224,11 +362,10 @@ async function updateVoucher(request, response) {
       return response.status(404).json({ error: "Voucher not found" });
     }
 
-    // 不允许通过 API 修改 usedCount 和 code
+    // Prevent modification of usedCount (for security)
     delete updateData.usedCount;
-    if (updateData.code) {
-      updateData.code = updateData.code.toUpperCase();
-    }
+    // Prevent modification of code through API
+    delete updateData.code;
 
     const updated = await prisma.voucher.update({
       where: { id },
@@ -242,9 +379,20 @@ async function updateVoucher(request, response) {
   }
 }
 
-// ============================================
-// 删除优惠券（软删除）
-// ============================================
+// ============================================================
+// DELETE VOUCHER (SOFT DELETE)
+// Deactivates a voucher instead of deleting
+// ============================================================
+
+/**
+ * DELETE /api/vouchers/:id
+ * 
+ * Soft deletes a voucher by setting isActive to false
+ * Voucher remains in database for historical records
+ * 
+ * @param {Request} request - Express request with voucher ID
+ * @param {Response} response - Express response object
+ */
 async function deleteVoucher(request, response) {
   try {
     const { id } = request.params;
@@ -254,6 +402,7 @@ async function deleteVoucher(request, response) {
       return response.status(404).json({ error: "Voucher not found" });
     }
 
+    // Soft delete: set isActive to false
     await prisma.voucher.update({
       where: { id },
       data: { isActive: false },
@@ -266,30 +415,50 @@ async function deleteVoucher(request, response) {
   }
 }
 
-// ============================================
-// 辅助函数：优惠券业务校验
-// ============================================
+// ============================================================
+// HELPER: VOUCHER BUSINESS VALIDATION
+// Validates voucher against all business rules
+// ============================================================
+
+/**
+ * Validates a voucher against business rules
+ * Checks: active status, expiry, usage limits, minimum order, merchant restriction
+ * 
+ * @param {Object} voucher - Voucher object from database
+ * @param {number} orderTotal - Current order total
+ * @param {Array} cartItems - Cart items to check merchant restriction
+ * @returns {Object} Validation result with errors and calculated discount
+ */
 async function validateVoucherBusiness(voucher, orderTotal, cartItems) {
   const errors = [];
   let discount = 0;
 
+  // Check if voucher is active
   if (!voucher.isActive) {
     errors.push("This voucher is no longer active");
   }
 
+  // Check if voucher has not started yet
+  if (voucher.startsAt && new Date() < voucher.startsAt) {
+    errors.push("This voucher is not active yet");
+  }
+
+  // Check if voucher has expired
   if (new Date() > voucher.expiresAt) {
     errors.push("This voucher has expired");
   }
 
+  // Check usage limit
   if (voucher.usageLimit && voucher.usedCount >= voucher.usageLimit) {
     errors.push("This voucher has reached its usage limit");
   }
 
+  // Check minimum order value
   if (voucher.minOrderValue && orderTotal < voucher.minOrderValue) {
-    errors.push(`Minimum order value is ${voucher.minOrderValue / 100} required`);
+    errors.push(`Minimum order value of ${voucher.minOrderValue / 100} required`);
   }
 
-  // 商户专属券：检查购物车中是否有该商户的商品
+  // Check merchant restriction for cart items
   if (voucher.merchantId && cartItems) {
     const merchantItems = cartItems.filter(
       (item) => item.merchantId === voucher.merchantId
@@ -299,18 +468,21 @@ async function validateVoucherBusiness(voucher, orderTotal, cartItems) {
     }
   }
 
+  // Calculate discount if no errors
   if (errors.length === 0) {
-    // 计算折扣
     if (voucher.discountType === "FIXED") {
+      // Fixed amount discount
       discount = voucher.discountValue;
     } else if (voucher.discountType === "PERCENTAGE") {
+      // Percentage discount
       discount = Math.floor((orderTotal || 0) * (voucher.discountValue / 100));
+      // Apply max discount cap if set
       if (voucher.maxDiscount) {
         discount = Math.min(discount, voucher.maxDiscount);
       }
     }
 
-    // 折扣不能超过订单总额
+    // Discount cannot exceed order total
     discount = Math.min(discount, orderTotal || 0);
   }
 
@@ -320,6 +492,10 @@ async function validateVoucherBusiness(voucher, orderTotal, cartItems) {
     discount,
   };
 }
+
+// ============================================================
+// EXPORTS
+// ============================================================
 
 module.exports = {
   createVoucher,

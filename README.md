@@ -314,4 +314,8 @@ This project is licensed under the MIT License.
 
 ## Support
 
+<<<<<<< HEAD
 For support, email support@example.com or open an issue in the repository.
+=======
+For support, email support@example.com or open an issue in the repository.
+>>>>>>> 0efce24 (commit)
