@@ -1,4 +1,4 @@
-// Heading component - REDESIGNED with Purple theme
+// Heading - Modern design with gradient text
 "use client";
 
 import React from 'react'
@@ -6,10 +6,10 @@ import React from 'react'
 const Heading = ({ title } : { title: string }) => {
   return (
     <div className="text-center mb-8">
-      <h2 className="text-3xl md:text-4xl font-bold text-gray-800 inline-block relative">
+      <h2 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 inline-block relative">
         {title}
-        <span className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-cyan-500 rounded-full"></span>
       </h2>
+      <div className="w-32 h-1.5 bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 rounded-full mx-auto mt-4" />
     </div>
   )
 }
