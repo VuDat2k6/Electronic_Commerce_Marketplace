@@ -1,70 +1,59 @@
-// *********************
-// Role of the component: Sidebar on admin dashboard page
-// Name of the component: DashboardSidebar.tsx
-// Developer: Vu Dat
-// Version: 1.0
-// Component call: <DashboardSidebar />
-// Input parameters: no input parameters
-// Output: sidebar for admin dashboard page
-// *********************
+// DashboardSidebar component - REDESIGNED with Purple theme
+"use client";
 
 import React from "react";
 import { MdDashboard } from "react-icons/md";
-import { FaTable } from "react-icons/fa6";
-import { FaRegUser } from "react-icons/fa6";
-import { FaGear } from "react-icons/fa6";
-import { FaBagShopping } from "react-icons/fa6";
-import { FaStore } from "react-icons/fa6";
-import { MdCategory } from "react-icons/md";
-import { FaFileUpload } from "react-icons/fa";
+import { FaTable, FaRegUser, FaBagShopping, FaStore, FaUpload } from "react-icons/fa6";
+import { MdCategory, MdSettings } from "react-icons/md";
 
 import Link from "next/link";
 
+const navItems = [
+  { href: "/admin", icon: MdDashboard, label: "Dashboard" },
+  { href: "/admin/orders", icon: FaBagShopping, label: "Orders" },
+  { href: "/admin/products", icon: FaTable, label: "Products" },
+  { href: "/admin/categories", icon: MdCategory, label: "Categories" },
+  { href: "/admin/users", icon: FaRegUser, label: "Users" },
+  { href: "/admin/sellers", icon: FaStore, label: "Sellers" },
+  { href: "/admin/settings", icon: MdSettings, label: "Settings" },
+];
+
 const DashboardSidebar = () => {
   return (
-    <div className="xl:w-[400px] bg-blue-500 h-full max-xl:w-full">
-      <Link href="/admin">
-        <div className="flex gap-x-2 w-full hover:bg-blue-600 cursor-pointer items-center py-6 pl-5 text-xl text-white">
-          <MdDashboard className="text-2xl" />{" "}
-          <span className="font-normal">Dashboard</span>
-        </div>
-      </Link>
-      <Link href="/admin/orders">
-        <div className="flex gap-x-2 w-full hover:bg-blue-600 cursor-pointer items-center py-6 pl-5 text-xl text-white">
-          <FaBagShopping className="text-2xl" />{" "}
-          <span className="font-normal">Orders</span>
-        </div>
-      </Link>
-      <Link href="/admin/products">
-        <div className="flex gap-x-2 w-full hover:bg-blue-600 cursor-pointer items-center py-6 pl-5 text-xl text-white">
-          <FaTable className="text-2xl" />{" "}
-          <span className="font-normal">Products</span>
-        </div>
-      </Link>
-      <Link href="/admin/categories">
-        <div className="flex gap-x-2 w-full hover:bg-blue-600 cursor-pointer items-center py-6 pl-5 text-xl text-white">
-          <MdCategory className="text-2xl" />{" "}
-          <span className="font-normal">Categories</span>
-        </div>
-      </Link>
-      <Link href="/admin/users">
-        <div className="flex gap-x-2 w-full hover:bg-blue-600 cursor-pointer items-center py-6 pl-5 text-xl text-white">
-          <FaRegUser className="text-2xl" />{" "}
-          <span className="font-normal">Users</span>
-        </div>
-      </Link>
-      <Link href="/admin/sellers">
-        <div className="flex gap-x-2 w-full hover:bg-blue-600 cursor-pointer items-center py-6 pl-5 text-xl text-white">
-          <FaStore className="text-2xl" />{" "}
-          <span className="font-normal">Sellers</span>
-        </div>
-      </Link>
-        <Link href="/admin/settings">
-            <div className="flex gap-x-2 w-full hover:bg-blue-600 cursor-pointer items-center py-6 pl-5 text-xl text-white">
-                <FaGear className="text-2xl" />{" "}
-                <span className="font-normal">Settings</span>
-            </div>
+    <div className="xl:w-[280px] bg-gradient-to-b from-purple-700 to-purple-900 h-full max-xl:w-full">
+      {/* Logo */}
+      <div className="px-6 py-6 border-b border-purple-600/30">
+        <Link href="/admin" className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+            <MdDashboard className="text-2xl text-white" />
+          </div>
+          <span className="text-xl font-bold text-white">Admin</span>
         </Link>
+      </div>
+
+      {/* Navigation */}
+      <nav className="p-4 space-y-1">
+        {navItems.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="flex items-center gap-3 px-4 py-3 text-white/80 hover:text-white hover:bg-white/10 rounded-xl transition-all duration-200 group"
+          >
+            <item.icon className="text-xl group-hover:scale-110 transition-transform" />
+            <span className="font-medium">{item.label}</span>
+          </Link>
+        ))}
+      </nav>
+
+      {/* Bottom Section */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-purple-600/30">
+        <Link href="/" className="flex items-center gap-3 px-4 py-3 text-white/60 hover:text-white hover:bg-white/10 rounded-xl transition-all duration-200">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+          </svg>
+          <span className="font-medium">Back to Home</span>
+        </Link>
+      </div>
     </div>
   );
 };

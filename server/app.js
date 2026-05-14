@@ -410,14 +410,13 @@ app.get('/health', (req, res) => {
  */
 app.get('/rate-limit-info', (req, res) => {
   res.status(200).json({
-    general: '100 requests per 15 minutes',
-    auth: '5 login attempts per 15 minutes',
-    register: '3 registrations per hour',
-    upload: '10 uploads per 15 minutes',
-    search: '30 searches per minute',
-    orders: '15 order operations per 15 minutes',
-    wishlist: '20 operations per 5 minutes',
-    products: '60 requests per minute',
+    general: '300 requests per 15 minutes',
+    auth: '300 login attempts per 15 minutes',
+    register: '20 registrations per hour',
+    upload: '300 uploads per 15 minutes',
+    search: '300 searches per minute',
+    orders: '300 order operations per 15 minutes',
+    users: '300 requests per 15 minutes',
     requestId: req.reqId
   });
 });
@@ -449,7 +448,7 @@ app.use((err, req, res, next) => {
 // SERVER STARTUP
 // ============================================================
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 5000;
 
 /**
  * Start the Express server

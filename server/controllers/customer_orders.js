@@ -14,8 +14,7 @@
  * @module controllers/customer_orders
  */
 
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const prisma = require("../utills/db");
 const { validateOrderData, ValidationError } = require('../utills/validation');
 const { createOrderUpdateNotification } = require('../utills/notificationHelpers');
 
@@ -392,6 +391,33 @@ async function getCustomerOrder(request, response) {
       where: {
         id: id,
       },
+      select: {
+        id: true,
+        name: true,
+        lastname: true,
+        phone: true,
+        email: true,
+        company: true,
+        adress: true,
+        apartment: true,
+        postalCode: true,
+        city: true,
+        country: true,
+        orderNotice: true,
+        status: true,
+        total: true,
+        dateTime: true,
+        buyerId: true,
+        items: {
+          select: {
+            id: true,
+            productId: true,
+            sellerId: true,
+            quantity: true,
+            priceAtPurchase: true,
+          }
+        }
+      }
     });
     
     if (!order) {
@@ -442,6 +468,27 @@ async function getAllOrders(request, response) {
         take: limit,
         orderBy: {
           dateTime: 'desc' // Newest orders first
+        },
+        select: {
+          id: true,
+          name: true,
+          lastname: true,
+          phone: true,
+          email: true,
+          company: true,
+          adress: true,
+          apartment: true,
+          postalCode: true,
+          city: true,
+          country: true,
+          orderNotice: true,
+          status: true,
+          total: true,
+          dateTime: true,
+          buyerId: true,
+          _count: {
+            select: { items: true }
+          }
         }
       }),
       prisma.customer_order.count()

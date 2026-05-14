@@ -6,6 +6,7 @@ import Image from "next/image";
 import { FaTrash, FaShoppingCart, FaHeart } from "react-icons/fa";
 import { SectionTitle } from "@/components";
 import { useWishlistStore, ProductInWishlist } from "@/app/_zustand/wishlistStore";
+import { useProductStore } from "@/app/_zustand/store";
 import apiClient from "@/lib/api";
 import toast from "react-hot-toast";
 
@@ -23,16 +24,44 @@ const WishlistPage = () => {
   const fetchProductDetails = async () => {
     setLoading(true);
     try {
-      const details: Record<string, any> = {};
-      for (const item of wishlist) {
-        if (item.slug) {
-          const response = await apiClient.get(`/api/slugs/${item.slug}`);
-          if (response.ok) {
-            details[item.id] = await response.json();
-          }
-        }
+      // Use the optimized bulk slugs endpoint
+      const slugs = wishlist.filter(item => item.slug).map(item => item.slug!);
+
+      if (slugs.length === 0) {
+        setProductDetails({});
+        return;
       }
-      setProductDetails(details);
+
+      // Fetch all products in a single request using the optimized bulk endpoint
+      const response = await apiClient.get(`/api/slugs/bulk?slugs=${slugs.join(",")}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        // Build lookup map from response
+        const details: Record<string, any> = {};
+        const products = data.products || [];
+        for (const product of products) {
+          details[product.id] = product;
+        }
+        setProductDetails(details);
+      } else {
+        // Fallback: try individual requests in parallel (only if bulk fails)
+        const results = await Promise.allSettled(
+          wishlist
+            .filter(item => item.slug)
+            .map(item =>
+              apiClient.get(`/api/slugs/${item.slug}`).then(res => res.json())
+            )
+        );
+        const details: Record<string, any> = {};
+        results.forEach((result, index) => {
+          if (result.status === "fulfilled") {
+            const item = wishlist.filter(w => w.slug)[index];
+            if (item) details[item.id] = result.value;
+          }
+        });
+        setProductDetails(details);
+      }
     } catch (error) {
       console.error("Error fetching product details:", error);
     } finally {
@@ -45,26 +74,18 @@ const WishlistPage = () => {
     toast.success("Removed from wishlist");
   };
 
+  const { addToCart } = useProductStore();
+
   const handleAddToCart = async (product: ProductInWishlist) => {
     try {
-      const cart = JSON.parse(localStorage.getItem("cart") || "[]");
-      const existingIndex = cart.findIndex((item: any) => item.id === product.id);
-      
-      if (existingIndex >= 0) {
-        cart[existingIndex].quantity += 1;
-      } else {
-        cart.push({
-          id: product.id,
-          title: product.title,
-          price: product.price,
-          image: product.image,
-          slug: product.slug,
-          quantity: 1,
-        });
-      }
-      
-      localStorage.setItem("cart", JSON.stringify(cart));
-      window.dispatchEvent(new Event("cartUpdated"));
+      addToCart({
+        id: product.id,
+        title: product.title,
+        price: product.price,
+        image: product.image,
+        slug: product.slug,
+        amount: 1,
+      });
       toast.success("Added to cart");
     } catch (error) {
       console.error("Error adding to cart:", error);

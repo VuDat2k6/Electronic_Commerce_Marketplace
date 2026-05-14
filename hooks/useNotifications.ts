@@ -207,6 +207,7 @@ export const useNotifications = () => {
 
 /**
  * Hook for real-time unread count (for header badge)
+ * Optimized to fetch user and count in parallel to avoid API waterfall
  */
 export const useUnreadCount = () => {
   const { unreadCount, setUnreadCount } = useNotificationStore();
@@ -216,30 +217,40 @@ export const useUnreadCount = () => {
     if (!session?.user?.email) return;
 
     try {
-      // Get user ID first
-      const userResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/users/email/${encodeURIComponent(session.user.email)}`
-      );
-      const userData = await userResponse.json();
+      // Get user email and fetch user data + unread count in parallel
+      const email = session.user.email;
       
-      if (userData?.id) {
-        const { unreadCount } = await notificationApi.getUnreadCount(userData.id);
-        setUnreadCount(unreadCount);
+      const [userResponse, unreadCountResponse] = await Promise.all([
+        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/users/email/${encodeURIComponent(email)}`),
+        notificationApi.getUnreadCountByEmail(email).catch(() => null)
+      ]);
+
+      if (userResponse.ok) {
+        const userData = await userResponse.json();
+        
+        if (userData?.id) {
+          // If unread count API failed, fetch it directly
+          if (unreadCountResponse === null) {
+            const directCount = await notificationApi.getUnreadCount(userData.id);
+            setUnreadCount(directCount.unreadCount);
+          } else {
+            setUnreadCount(unreadCountResponse.unreadCount);
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching unread count:', error);
     }
   }, [session?.user?.email, setUnreadCount]);
 
-  // Auto-refresh unread count every 30 seconds
+  // Auto-refresh unread count every 30 seconds (optimized)
   useEffect(() => {
     fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000); // 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
     
     // Listen for order completed events to refresh immediately
     const handleOrderCompleted = () => {
-      console.log('Order completed - refreshing notifications');
-      setTimeout(fetchUnreadCount, 1000); // Slight delay to ensure notification is created
+      setTimeout(fetchUnreadCount, 1000);
     };
     
     window.addEventListener('orderCompleted', handleOrderCompleted);

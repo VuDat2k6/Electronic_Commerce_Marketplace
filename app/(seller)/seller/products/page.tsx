@@ -67,7 +67,7 @@ export default function SellerProductsPage() {
         <div className="text-center py-20">Loading...</div>
       ) : products.length === 0 ? (
         <div className="text-center py-20 text-gray-500">
-          You don't have any products yet.{" "}
+          You don&apos;t have any products yet. {" "}
           <Link href="/seller/products/new" className="text-green-600 underline">
             Add one now
           </Link>

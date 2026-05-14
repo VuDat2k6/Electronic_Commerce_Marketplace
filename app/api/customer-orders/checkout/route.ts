@@ -18,7 +18,7 @@ interface CheckoutRequestBody {
     productId: string;
     quantity: number;
     unitPrice?: number;
-    merchantId?: string;
+    sellerId?: string;
   }>;
   voucherCodes?: string[];
 }

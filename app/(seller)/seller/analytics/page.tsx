@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import apiClient from "@/lib/api";
-import { FaChartLine, FaBoxOpen, FaDollarSign, FaShoppingBag, FaTrophy, FaChartBar } from "react-icons/fa6";
+import { FaChartLine, FaBoxOpen, FaDollarSign, FaTrophy, FaChartBar, FaCartShopping } from "react-icons/fa6";
 
 interface AnalyticsData {
   totalProducts: number;
@@ -43,13 +43,14 @@ export default function SellerAnalyticsPage() {
     const fetchAnalytics = async () => {
       if (status === "loading") return;
 
-      if (!session?.user?.id) {
+      const userId = (session?.user as any)?.id;
+      if (!userId) {
         setLoading(false);
         return;
       }
 
       try {
-        const res = await apiClient.get(`/api/seller/analytics/overview?sellerId=${session.user.id}`);
+        const res = await apiClient.get(`/api/seller/analytics/overview?sellerId=${userId}`);
 
         if (!res.ok) {
           throw new Error("Failed to fetch analytics");
@@ -65,7 +66,7 @@ export default function SellerAnalyticsPage() {
     };
 
     fetchAnalytics();
-  }, [session?.user?.id, status]);
+  }, [(session?.user as any)?.id, status]);
 
   if (loading) return <div className="text-center py-20">Loading...</div>;
 
@@ -94,7 +95,7 @@ export default function SellerAnalyticsPage() {
         <StatCard
           title="Total Orders"
           value={data.totalOrders}
-          icon={FaShoppingBag}
+          icon={FaCartShopping}
           color="border-blue-500"
         />
         <StatCard

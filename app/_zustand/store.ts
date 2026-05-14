@@ -33,7 +33,7 @@ export type ProductInCart = {
   price: number;           // Unit price (in cents)
   image: string;           // Product image URL
   amount: number;          // Quantity in cart
-  sellerId?: string;       // Seller ID (bắt buộc - thay merchantId)
+  sellerId?: string;       // Seller ID (required - replacing merchantId)
   sellerName?: string;     // Seller name (thay merchantName)
   slug?: string;           // URL-friendly product identifier
   maxStock?: number;       // Maximum available stock

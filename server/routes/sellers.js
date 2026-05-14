@@ -8,20 +8,23 @@ const prisma = require('../utills/db');
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const seller = await prisma.user.findUnique({
-      where: { id, role: 'seller' },
-      select: {
-        id: true,
-        email: true,
-        shopName: true,
-        shopDescription: true,
-        shopPhone: true,
-        shopAddress: true,
-        shopStatus: true,
-        shopApprovedAt: true,
+
+    // First verify user exists and has seller role
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, role: true }
+    });
+
+    if (!user || user.role !== 'seller') {
+      return res.status(404).json({ error: 'Seller không tồn tại' });
+    }
+
+    // Get merchant data for seller
+    const merchant = await prisma.merchant.findFirst({
+      where: { id: id },
+      include: {
         products: {
-          where: { inStock: { gt: 0 } },
+          where: { status: 'PUBLISHED' },
           select: {
             id: true,
             title: true,
@@ -37,11 +40,23 @@ router.get('/:id', async (req, res) => {
       }
     });
 
-    if (!seller) {
+    if (!merchant) {
       return res.status(404).json({ error: 'Seller không tồn tại' });
     }
 
-    return res.json(seller);
+    return res.json({
+      id: merchant.id,
+      name: merchant.name,
+      email: merchant.email,
+      description: merchant.description,
+      phone: merchant.phone,
+      address: merchant.address,
+      status: merchant.status,
+      avatar: merchant.avatar,
+      banner: merchant.banner,
+      totalProducts: merchant.products.length,
+      products: merchant.products
+    });
   } catch (error) {
     console.error('Error fetching seller:', error);
     return res.status(500).json({ error: 'Lỗi server' });
@@ -55,18 +70,19 @@ router.get('/:id/products', async (req, res) => {
     const { page = 1, limit = 20 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const seller = await prisma.user.findUnique({
-      where: { id, role: 'seller' },
-      select: { id: true, shopName: true, shopStatus: true }
+    // Verify user exists and has seller role
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, role: true }
     });
 
-    if (!seller) {
+    if (!user || user.role !== 'seller') {
       return res.status(404).json({ error: 'Seller không tồn tại' });
     }
 
     const [products, total] = await Promise.all([
       prisma.product.findMany({
-        where: { sellerId: id, inStock: { gt: 0 } },
+        where: { merchantId: id, inStock: { gt: 0 }, status: 'PUBLISHED' },
         select: {
           id: true,
           title: true,
@@ -81,7 +97,7 @@ router.get('/:id/products', async (req, res) => {
         take: parseInt(limit),
         orderBy: { createdAt: 'desc' }
       }),
-      prisma.product.count({ where: { sellerId: id, inStock: { gt: 0 } } })
+      prisma.product.count({ where: { merchantId: id, inStock: { gt: 0 }, status: 'PUBLISHED' } })
     ]);
 
     return res.json({

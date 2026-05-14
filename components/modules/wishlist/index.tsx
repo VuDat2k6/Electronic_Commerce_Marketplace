@@ -13,7 +13,7 @@ export const WishlistModule = () => {
   const { wishlist, setWishlist, removeFromWishlist } = useWishlistStore();
   const [userId, setUserId] = useState<string | null>(null);
 
-  // Lấy wishlist từ API theo userId
+  // Get wishlist from API by userId
   const getWishlistByUserId = useCallback(async (id: string) => {
     try {
       const response = await apiClient.get(`/api/wishlist/${id}`, {
@@ -27,9 +27,9 @@ export const WishlistModule = () => {
       const data = await response.json();
       const wishlistData = data.wishlist || data || [];
 
-      // Chuyển đổi dữ liệu API thành ProductInWishlist
+      // Convert API data to ProductInWishlist
       const productArray: ProductInWishlist[] = wishlistData
-        .filter((item: any) => item?.product) // Lọc bỏ items không có product
+        .filter((item: any) => item?.product) // Filter out items without product
         .map((item: any) => ({
           id: item.product.id,
           title: item.product.title,
@@ -46,7 +46,7 @@ export const WishlistModule = () => {
     }
   }, [setWishlist]);
 
-  // Lấy userId từ email
+  // Get userId from email
   const getUserByEmail = useCallback(async () => {
     if (!session?.user?.email) return;
 
@@ -71,20 +71,20 @@ export const WishlistModule = () => {
     }
   }, [session?.user?.email, getWishlistByUserId]);
 
-  // Gọi API khi session thay đổi
+  // Call API when session changes
   useEffect(() => {
     if (status === "authenticated") {
       getUserByEmail();
     }
   }, [status, getUserByEmail]);
 
-  // Xử lý xóa sản phẩm khỏi wishlist
+  // Handle removing product from wishlist
   const handleRemoveFromWishlist = useCallback(async (id: string, userId?: string) => {
     try {
-      // Xóa khỏi state trước (optimistic update)
+      // Remove from state first (optimistic update)
       removeFromWishlist(id);
 
-      // Nếu có userId, gọi API để xóa trong database
+      // If userId exists, call API to remove from database
       if (userId) {
         const response = await apiClient.delete(`/api/wishlist/${userId}/${id}`);
         if (!response.ok) {
@@ -96,7 +96,7 @@ export const WishlistModule = () => {
     } catch (error) {
       console.error("Error removing from wishlist:", error);
       toast.error("Failed to remove from wishlist");
-      // TODO: Khôi phục lại state nếu cần
+      // TODO: Restore state if needed
     }
   }, [removeFromWishlist]);
 
@@ -109,7 +109,7 @@ export const WishlistModule = () => {
     );
   }
 
-  // Chưa đăng nhập
+  // Not logged in
   if (status === "unauthenticated") {
     return (
       <div className="text-center py-20">
@@ -120,7 +120,7 @@ export const WishlistModule = () => {
     );
   }
 
-  // Wishlist trống
+  // Empty wishlist
   if (!wishlist || wishlist.length === 0) {
     return (
       <div className="text-center py-20">

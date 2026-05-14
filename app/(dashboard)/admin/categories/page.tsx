@@ -80,7 +80,7 @@ const DashboardCategory = () => {
 
                     <td>
                       <div>
-                        <p>{formatCategoryName(category?.name)}</p>
+                        <p>{formatCategoryName(category?.name || "")}</p>
                       </div>
                     </td>
 

@@ -23,14 +23,15 @@ const SellerBulkUploadPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchHistory = async () => {
-    if (!session?.user?.id) {
+    const userId = (session?.user as any)?.id;
+    if (!userId) {
       setLoadingHistory(false);
       return;
     }
 
     setLoadingHistory(true);
     try {
-      const res = await apiClient.get(`/api/bulk-upload?userId=${session.user.id}`);
+      const res = await apiClient.get(`/api/bulk-upload?userId=${userId}`);
       const data = await res.json();
       setHistory(data.batches || []);
     } catch {
@@ -42,7 +43,8 @@ const SellerBulkUploadPage = () => {
 
   React.useEffect(() => {
     fetchHistory();
-  }, [session?.user?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(session as any)?.user?.id]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];

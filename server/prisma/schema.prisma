@@ -55,6 +55,14 @@ model Product {
   orderItems      Order_item[]
   Wishlist        Wishlist[]
   bulkUploadItems bulk_upload_item[] @relation("ProductBulkItems")
+
+  @@index([categoryId])
+  @@index([sellerId])
+  @@index([price])
+  @@index([rating])
+  @@index([inStock])
+  @@index([categoryId, price])
+  @@index([categoryId, rating])
 }
 
 model Image {
@@ -87,6 +95,12 @@ model Customer_order {
 
   buyer User?        @relation(fields: [buyerId], references: [id])
   items Order_item[]
+
+  @@index([email])
+  @@index([buyerId])
+  @@index([status])
+  @@index([dateTime])
+  @@index([status, dateTime])
 }
 
 // =====================
@@ -104,6 +118,10 @@ model Order_item {
   order   Customer_order @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product        @relation(fields: [productId], references: [id])
   seller  User           @relation(fields: [sellerId], references: [id])
+
+  @@index([orderId])
+  @@index([sellerId])
+  @@index([productId])
 }
 
 model Category {
@@ -118,6 +136,10 @@ model Wishlist {
   productId String
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
+
+  @@unique([productId, userId])
+  @@index([userId])
+  @@index([productId])
 }
 
 enum NotificationType {

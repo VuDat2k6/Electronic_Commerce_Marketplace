@@ -34,10 +34,19 @@ const SingleProductPage = async ({ params }: SingleProductPageProps) => {
   const product = await data.json();
 
   // sending API request for more than 1 product image if it exists
-  const imagesData = await apiClient.get(
-    `/api/images/${paramsAwaited?.id}`
-  );
-  const images = await imagesData.json();
+  let images = [];
+  if (paramsAwaited?.id && paramsAwaited.id !== 'undefined') {
+    try {
+      const imagesData = await apiClient.get(
+        `/api/images/${paramsAwaited?.id}`
+      );
+      if (imagesData.ok) {
+        images = await imagesData.json();
+      }
+    } catch (e) {
+      console.error("Error fetching images:", e);
+    }
+  }
 
   if (!product || product.error) {
     notFound();
@@ -61,13 +70,13 @@ const SingleProductPage = async ({ params }: SingleProductPageProps) => {
               className="w-auto h-auto"
             />
             <div className="flex justify-around mt-5 flex-wrap gap-y-1 max-[500px]:justify-center max-[500px]:gap-x-1">
-              {images?.map((imageItem: ImageItem, key: number) => (
+              {images && images.length > 0 && images.map((imageItem: ImageItem, key: number) => (
                 <Image
                   key={imageItem.imageID + key}
                   src={imageItem.image}
                   width={100}
                   height={100}
-                  alt="laptop image"
+                  alt="product image"
                   className="w-auto h-auto"
                 />
               ))}

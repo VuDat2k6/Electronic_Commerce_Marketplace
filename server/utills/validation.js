@@ -1,6 +1,5 @@
 // Server-side validation utilities for payment and order processing
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const prisma = require("./db");
 
 // Validation error class
 class ValidationError extends Error {
@@ -300,19 +299,20 @@ const orderValidation = {
     return Math.round(numTotal * 100) / 100; // Round to 2 decimal places
   },
 
-  // Validate order status
+  // Validate order status (accepts both lowercase and uppercase, returns uppercase)
   validateStatus: (status) => {
-    const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
-    
+    const validStatuses = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
+
     if (!status || typeof status !== 'string') {
       throw new ValidationError('Order status is required', 'status');
     }
 
-    if (!validStatuses.includes(status.toLowerCase())) {
+    const upperStatus = status.toUpperCase();
+    if (!validStatuses.includes(upperStatus)) {
       throw new ValidationError(`Invalid order status. Must be one of: ${validStatuses.join(', ')}`, 'status');
     }
 
-    return status.toLowerCase();
+    return upperStatus;
   }
 };
 

@@ -1,19 +1,17 @@
-// *********************
-// Role of the component: Simple H2 heading component
-// Name of the component: Heading.tsx
-// Developer: Vu Dat
-// Version: 1.0
-// Component call: <Heading title={title} />
-// Input parameters: { title: string }
-// Output: h2 heading title with some styles 
-// *********************
+// Heading component - REDESIGNED with Purple theme
+"use client";
 
 import React from 'react'
 
 const Heading = ({ title } : { title: string }) => {
   return (
-    <h2 className="text-white text-7xl font-extrabold text-center mt-20 max-lg:text-5xl">{ title }</h2>
+    <div className="text-center mb-8">
+      <h2 className="text-3xl md:text-4xl font-bold text-gray-800 inline-block relative">
+        {title}
+        <span className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-cyan-500 rounded-full"></span>
+      </h2>
+    </div>
   )
 }
 
-export default Heading
+export default Heading;

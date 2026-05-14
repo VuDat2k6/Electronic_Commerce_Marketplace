@@ -10,9 +10,9 @@ export default async function SellerLayout({
 }) {
   const session = await getServerSession(authOptions);
 
-  // Nếu chưa login hoặc không phải seller, redirect
+  // If not logged in or not a seller, redirect
   if (!session) redirect("/login");
-  if (session.user.role !== "seller") redirect("/become-seller");
+  if ((session?.user as any)?.role !== "seller") redirect("/become-seller");
 
   return (
     <div className="flex flex-col h-screen">

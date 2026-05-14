@@ -32,6 +32,10 @@ model User {
   Wishlist          Wishlist[]
   notifications     Notification[]
   bulkUploadBatches bulk_upload_batch[]  @relation("UserBatches")
+  reviews          Review[]              @relation("UserReviews")
+
+  @@index([role])
+  @@index([shopStatus])
 }
 
 // =====================
@@ -47,20 +51,37 @@ model Product {
   description  String
   manufacturer String
   inStock      Int      @default(1)
+  status       String   @default("DRAFT")  // DRAFT, PUBLISHED, ARCHIVED
   categoryId   String
   sellerId     String   // ← đổi từ merchantId
 
-  category        Category       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  seller          User           @relation(fields: [sellerId], references: [id])
-  orderItems      Order_item[]
-  Wishlist        Wishlist[]
+  category        Category          @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  seller          User              @relation(fields: [sellerId], references: [id])
+  orderItems     Order_item[]
+  Wishlist       Wishlist[]
+  reviews        Review[]
+  subOrderProducts SubOrderProduct[]
   bulkUploadItems bulk_upload_item[] @relation("ProductBulkItems")
+
+  @@index([categoryId])
+  @@index([sellerId])
+  @@index([price])
+  @@index([rating])
+  @@index([inStock])
+  @@index([status])
+  @@index([manufacturer])
+  @@index([categoryId, price])
+  @@index([categoryId, rating])
+  @@index([sellerId, status])
+  @@index([status, inStock])
 }
 
 model Image {
   imageID   String @id @default(uuid())
   productID String
   image     String
+
+  @@index([productID])
 }
 
 // =====================
@@ -87,12 +108,181 @@ model Customer_order {
 
   buyer User?        @relation(fields: [buyerId], references: [id])
   items Order_item[]
+  payments Payment[]
+  subOrders SubOrder[]
+
+  @@index([email])
+  @@index([buyerId])
+  @@index([status])
+  @@index([dateTime])
+  @@index([status, dateTime])
+  @@index([dateTime, status])
+}
+
+// =====================
+// MODEL MERCHANT (legacy - sellers now use User.shop fields)
+// Kept for backward compatibility with existing routes/controllers
+// Note: New products should use Product.sellerId -> User.id
+// =====================
+model Merchant {
+  id           String  @id @default(uuid())
+  name         String
+  description  String?
+  email        String?
+  phone        String?
+  address      String?
+  status       String  @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED
+  shippingFee  Int     @default(0)
+  avatar       String?
+  banner       String?
+
+  // Relations
+  vouchers Voucher[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+// =====================
+// MODEL VOUCHER
+// =====================
+model Voucher {
+  id             String    @id @default(uuid())
+  code           String    @unique
+  title          String
+  description    String?
+  discountType   String    // PERCENTAGE, FIXED
+  discountValue  Int        // % (1-100) hoặc số tiền (cents)
+  merchantId     String?
+  merchant       Merchant?  @relation(fields: [merchantId], references: [id])
+  minOrderValue  Int?       // Số tiền tối thiểu (cents)
+  maxDiscount   Int?       // Giảm tối đa (cents)
+  usageLimit    Int?
+  usedCount     Int        @default(0)
+  perUserLimit  Int        @default(1)
+  startsAt      DateTime  @default(now())
+  expiresAt     DateTime
+  isActive      Boolean   @default(true)
+
+  usages VoucherUsage[]
+
+  @@index([code])
+  @@index([merchantId])
+  @@index([isActive])
+  @@index([expiresAt])
+}
+
+// =====================
+// MODEL VOUCHER_USAGE
+// =====================
+model VoucherUsage {
+  id        String   @id @default(uuid())
+  voucherId String
+  voucher   Voucher  @relation(fields: [voucherId], references: [id])
+  userId    String?
+  orderId   String?
+  usedAt    DateTime @default(now())
+
+  @@index([voucherId])
+  @@index([userId])
+}
+
+// =====================
+// MODEL PAYMENT
+// =====================
+model Payment {
+  id        String   @id @default(uuid())
+  orderId   String
+  customer_order Customer_order @relation(fields: [orderId], references: [id])
+  status    String   @default("PENDING") // PENDING, COMPLETED, FAILED
+  method    String?  // CARD, BANK_TRANSFER, COD
+  amount    Int      @default(0)
+  paidAt    DateTime?
+
+  @@index([orderId])
+  @@index([status])
+}
+
+// =====================
+// MODEL REVIEW
+// =====================
+model Review {
+  id        String   @id @default(uuid())
+  rating    Int      // 1-5 stars
+  comment   String?
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("UserReviews", fields: [userId], references: [id])
+  merchantId String
+  orderId   String?
+  status    String   @default("PUBLISHED") // PUBLISHED, HIDDEN, FLAGGED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([merchantId])
+  @@index([userId])
+  @@index([rating])
+}
+
+// =====================
+// MODEL SUB_ORDER (legacy - for backward compatibility)
+// Note: New orders should use Customer_order + Order_item
+// =====================
+model SubOrder {
+  id              String   @id @default(uuid())
+  parentOrderId   String
+  parentOrder     Customer_order @relation(fields: [parentOrderId], references: [id], onDelete: Cascade)
+  merchantId      String
+  status          String   @default("PENDING") // PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED
+  subTotal        Int      @default(0)
+  shippingTotal   Int      @default(0)
+  trackingNumber  String?
+  shippingProvider String?
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  confirmedAt     DateTime?
+  cancelledAt     DateTime?
+  cancelReason    String?
+
+  products SubOrderProduct[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentOrderId])
+  @@index([merchantId])
+  @@index([status])
+}
+
+// =====================
+// MODEL SUB_ORDER_PRODUCT (legacy - for backward compatibility)
+// Note: New orders should use Customer_order + Order_item
+// =====================
+model SubOrderProduct {
+  id                    String   @id @default(uuid())
+  subOrderId           String
+  subOrder             SubOrder  @relation(fields: [subOrderId], references: [id], onDelete: Cascade)
+  productId            String
+  product              Product   @relation(fields: [productId], references: [id])
+  quantity             Int
+  productNameSnapshot  String
+  productImageSnapshot String?
+  unitPriceSnapshot    Int
+  merchantIdSnapshot   String
+  merchantNameSnapshot String
+
+  @@index([subOrderId])
+  @@index([productId])
 }
 
 // =====================
 // MODEL ORDER_ITEM (thay thế customer_order_product)
-// =====================
 // Lý do: cần biết item này của seller nào để seller tự xem đơn của mình
+// =====================
 model Order_item {
   id              String @id @default(uuid())
   orderId         String
@@ -104,6 +294,10 @@ model Order_item {
   order   Customer_order @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product        @relation(fields: [productId], references: [id])
   seller  User           @relation(fields: [sellerId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([sellerId])
 }
 
 model Category {
@@ -118,6 +312,10 @@ model Wishlist {
   productId String
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
+
+  @@unique([productId, userId])
+  @@index([userId])
+  @@index([productId])
 }
 
 enum NotificationType {
@@ -165,6 +363,10 @@ model bulk_upload_batch {
 
   userId String?
   user   User?   @relation(name: "UserBatches", fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model bulk_upload_item {
@@ -186,6 +388,10 @@ model bulk_upload_item {
 
   status BulkUploadItemStatus @default(CREATED)
   error  String?
+
+  @@index([batchId])
+  @@index([productId])
+  @@index([status])
 }
 
 enum BulkUploadStatus {

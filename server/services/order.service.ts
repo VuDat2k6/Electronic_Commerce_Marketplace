@@ -8,7 +8,7 @@ export interface CheckoutPayloadItem {
   productId: string;
   quantity: number;
   unitPrice?: number;
-  merchantId?: string;
+  sellerId?: string;
 }
 
 export interface CreateCustomerOrderInput {
@@ -118,7 +118,7 @@ export async function createCustomerOrder(
     productId: item.productId?.trim(),
     quantity: Number(item.quantity),
     unitPrice: item.unitPrice,
-    merchantId: item.merchantId,
+    sellerId: item.sellerId,
   }));
 
   for (const item of normalizedItems) {
@@ -138,7 +138,7 @@ export async function createCustomerOrder(
       productId: string;
       quantity: number;
       unitPrice?: number;
-      merchantId?: string;
+      sellerId?: string;
     }
   >();
 
@@ -157,11 +157,11 @@ export async function createCustomerOrder(
       }
 
       if (
-        existing.merchantId &&
-        item.merchantId &&
-        existing.merchantId !== item.merchantId
+        existing.sellerId &&
+        item.sellerId &&
+        existing.sellerId !== item.sellerId
       ) {
-        throw new Error(`Inconsistent merchantId for productId: ${item.productId}`);
+        throw new Error(`Inconsistent sellerId for productId: ${item.productId}`);
       }
     } else {
       mergedItemMap.set(item.productId, { ...item });
@@ -177,12 +177,10 @@ export async function createCustomerOrder(
   const products = await prisma.product.findMany({
     where: { id: { in: uniqueProductIds } },
     include: {
-      merchant: {
+      seller: {
         select: {
           id: true,
-          name: true,
-          shippingFee: true,
-          status: true,
+          email: true,
         },
       },
     },
@@ -197,15 +195,16 @@ export async function createCustomerOrder(
   const productMap = new Map(products.map((product) => [product.id, product]));
 
   // ============================================
-  // Step 3: Validate products and group by merchant
+  // Step 3: Validate products and group by seller
   // ============================================
-  const merchantGroups = new Map<
+  const sellerGroups = new Map<
     string,
     {
       items: { productId: string; quantity: number; unitPrice: number }[];
       subTotal: number;
       shippingTotal: number;
-      merchant: (typeof products)[0]["merchant"];
+      sellerId: string;
+      sellerEmail: string;
     }
   >();
 
@@ -213,14 +212,8 @@ export async function createCustomerOrder(
     const dbProduct = productMap.get(item.productId)!;
 
     // Business validation
-    if (dbProduct.merchant.status !== "ACTIVE") {
-      throw new Error(`Merchant is not active for product: ${dbProduct.title}`);
-    }
     if (dbProduct.inStock < item.quantity) {
       throw new Error(`Insufficient stock for "${dbProduct.title}": only ${dbProduct.inStock} left`);
-    }
-    if (item.merchantId && item.merchantId !== dbProduct.merchantId) {
-      throw new Error(`Merchant mismatch for product: ${dbProduct.title}`);
     }
 
     const dbPrice = Number(dbProduct.price);
@@ -228,17 +221,19 @@ export async function createCustomerOrder(
       throw new Error(`Price changed for "${dbProduct.title}". Please refresh your cart.`);
     }
 
-    // Group by merchant
-    if (!merchantGroups.has(dbProduct.merchantId)) {
-      merchantGroups.set(dbProduct.merchantId, {
+    // Group by seller (use sellerId from product)
+    const sellerId = item.merchantId || dbProduct.sellerId;
+    if (!sellerGroups.has(sellerId)) {
+      sellerGroups.set(sellerId, {
         items: [],
         subTotal: 0,
-        shippingTotal: Number(dbProduct.merchant.shippingFee) || 0,
-        merchant: dbProduct.merchant,
+        shippingTotal: 0, // No per-seller shipping in current schema
+        sellerId,
+        sellerEmail: dbProduct.seller?.email || "",
       });
     }
 
-    const group = merchantGroups.get(dbProduct.merchantId)!;
+    const group = sellerGroups.get(sellerId)!;
     group.items.push({
       productId: item.productId,
       quantity: item.quantity,
@@ -249,14 +244,12 @@ export async function createCustomerOrder(
 
   // Calculate totals
   let totalSubTotal = 0;
-  let totalShipping = 0;
 
-  for (const group of merchantGroups.values()) {
+  for (const group of sellerGroups.values()) {
     totalSubTotal += group.subTotal;
-    totalShipping += group.shippingTotal;
   }
 
-  const grandTotal = totalSubTotal + totalShipping;
+  const grandTotal = totalSubTotal;
 
   // ============================================
   // Step 4: Apply vouchers
@@ -266,7 +259,7 @@ export async function createCustomerOrder(
 
   if (input.voucherCodes && input.voucherCodes.length > 0) {
     const userId = input.customerId || input.email || "anonymous";
-    const voucherResults = await applyVouchers(input.voucherCodes, userId, grandTotal, merchantGroups);
+    const voucherResults = await applyVouchers(input.voucherCodes, userId, grandTotal, sellerGroups);
     discountTotal = voucherResults.totalDiscount;
     appliedVouchers.push(...voucherResults.applied);
   }
@@ -297,12 +290,12 @@ export async function createCustomerOrder(
 
     const createdSubOrders: SubOrderSummary[] = [];
 
-    // 5.2 Create one sub-order for each merchant
-    for (const [merchantId, group] of merchantGroups.entries()) {
+    // 5.2 Create one sub-order for each seller
+    for (const [, group] of sellerGroups.entries()) {
       const subOrder = await tx.subOrder.create({
         data: {
           parentOrderId: order.id,
-          merchantId,
+          merchantId: group.sellerId,
           status: "PENDING",
           subTotal: group.subTotal,
           shippingTotal: group.shippingTotal,
@@ -322,8 +315,8 @@ export async function createCustomerOrder(
             productNameSnapshot: dbProduct.title,
             productImageSnapshot: dbProduct.mainImage,
             unitPriceSnapshot: item.unitPrice,
-            merchantIdSnapshot: merchantId,
-            merchantNameSnapshot: group.merchant.name,
+            merchantIdSnapshot: group.sellerId,
+            merchantNameSnapshot: dbProduct.seller?.email || "Unknown Seller",
           },
         });
 
@@ -345,8 +338,8 @@ export async function createCustomerOrder(
 
       createdSubOrders.push({
         id: subOrder.id,
-        merchantId,
-        merchantName: group.merchant.name,
+        merchantId: group.sellerId,
+        merchantName: dbProduct?.seller?.email || "Unknown Seller",
         status: subOrder.status,
         subTotal: group.subTotal,
         shippingTotal: group.shippingTotal,
@@ -381,9 +374,9 @@ export async function createCustomerOrder(
     orderId: createdOrder.id,
     total: finalTotal,
     subTotal: totalSubTotal,
-    shippingTotal: totalShipping,
+    shippingTotal: 0,
     discountTotal,
-    subOrderCount: merchantGroups.size,
+    subOrderCount: sellerGroups.size,
     message: "Order created successfully",
     subOrders: (createdOrder as any).subOrders || [],
   };
@@ -396,7 +389,7 @@ async function applyVouchers(
   voucherCodes: string[],
   userId: string,
   orderTotal: number,
-  merchantGroups: Map<string, unknown>
+  _sellerGroups: Map<string, unknown>
 ): Promise<{ totalDiscount: number; applied: { code: string; discount: number }[] }> {
   let totalDiscount = 0;
   const applied: { code: string; discount: number }[] = [];
@@ -455,14 +448,10 @@ export async function listCustomerOrders(customerId: string): Promise<ListCustom
     where: { email: customerId },
     orderBy: { dateTime: "desc" },
     include: {
-      subOrders: {
+      items: {
         include: {
-          merchant: { select: { id: true, name: true } },
-          products: {
-            include: {
-              product: { select: { id: true, slug: true, mainImage: true } },
-            },
-          },
+          product: { select: { id: true, slug: true, mainImage: true } },
+          seller: { select: { id: true, email: true } },
         },
       },
       payments: true,

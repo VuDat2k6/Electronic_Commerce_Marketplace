@@ -22,7 +22,15 @@ const SearchPage = async ({ searchParams }: Props) => {
       products = [];
     } else {
       const result = await data.json();
-      products = Array.isArray(result) ? result : [];
+      // Handle both array and object response formats
+      if (Array.isArray(result)) {
+        products = result;
+      } else if (result && typeof result === 'object') {
+        // New format: { products: [...], count: number, query: string }
+        products = result.products || [];
+      } else {
+        products = [];
+      }
     }
   } catch (error) {
     console.error('Error fetching search results:', error);

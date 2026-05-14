@@ -272,3 +272,17 @@ export const isValidCreditCardCVVOrCVC = (input: string) => {
   const regex = /^[0-9]{3,4}$/;
   return regex.test(input);
 };
+
+// ============================================
+// Shared Utilities
+// ============================================
+
+/**
+ * Format price from cents to currency string
+ * @param cents - Price in cents (e.g., 1999 = $19.99)
+ * @param currency - Currency symbol (default: $)
+ * @returns Formatted price string (e.g., "$19.99")
+ */
+export const formatPrice = (cents: number, currency = "$"): string => {
+  return `${currency}${(cents / 100).toFixed(2)}`;
+};

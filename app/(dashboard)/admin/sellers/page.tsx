@@ -34,7 +34,7 @@ const AdminSellersPage = () => {
       const data = await res.json();
       setSellers(Array.isArray(data) ? data : []);
     } catch (err) {
-      toast.error("Lỗi khi tải danh sách sellers");
+      toast.error("Error loading sellers list");
       setSellers([]);
     } finally {
       setLoading(false);
@@ -49,28 +49,28 @@ const AdminSellersPage = () => {
     try {
       const res = await apiClient.patch(`/api/admin/sellers/${id}/approve`);
       if (res.ok) {
-        toast.success("Đã duyệt seller thành công!");
+        toast.success("Seller approved successfully!");
         fetchSellers();
       } else {
-        toast.error("Lỗi khi duyệt seller");
+        toast.error("Error approving seller");
       }
     } catch {
-      toast.error("Lỗi khi duyệt seller");
+      toast.error("Error approving seller");
     }
   };
 
   const handleSuspend = async (id: string) => {
-    if (!confirm("Bạn có chắc muốn tạm ngưng seller này?")) return;
+    if (!confirm("Are you sure you want to suspend this seller?")) return;
     try {
-      const res = await apiClient.patch(`/api/admin/sellers/${id}/suspend`, { reason: "Vi phạm điều khoản sử dụng" });
+      const res = await apiClient.patch(`/api/admin/sellers/${id}/suspend`, { reason: "Terms of service violation" });
       if (res.ok) {
-        toast.success("Đã tạm ngưng seller!");
+        toast.success("Seller suspended!");
         fetchSellers();
       } else {
-        toast.error("Lỗi khi tạm ngưng seller");
+        toast.error("Error suspending seller");
       }
     } catch {
-      toast.error("Lỗi khi tạm ngưng seller");
+      toast.error("Error suspending seller");
     }
   };
 
@@ -95,7 +95,7 @@ const AdminSellersPage = () => {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Quản lý Sellers</h1>
+        <h1 className="text-2xl font-bold">Sellers Management</h1>
         <div className="flex gap-2">
           {(["ALL", "PENDING", "ACTIVE", "SUSPENDED"] as const).map((f) => (
             <button
@@ -108,16 +108,16 @@ const AdminSellersPage = () => {
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
-              {f === "ALL" ? "Tất cả" : f === "PENDING" ? "Chờ duyệt" : f === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
+              {f === "ALL" ? "All" : f === "PENDING" ? "Pending" : f === "ACTIVE" ? "Active" : "Suspended"}
             </button>
           ))}
         </div>
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-gray-500">Đang tải...</div>
+        <div className="text-center py-12 text-gray-500">Loading...</div>
       ) : filteredSellers.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">Không có seller nào</div>
+        <div className="text-center py-12 text-gray-500">No sellers found</div>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <table className="w-full">
@@ -125,18 +125,18 @@ const AdminSellersPage = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Shop</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sản phẩm</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trạng thái</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ngày tạo</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Hành động</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Products</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created Date</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filteredSellers.map((seller) => (
                 <tr key={seller.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
-                    <div className="font-medium text-gray-900">{seller.shopName || "Chưa có tên"}</div>
-                    <div className="text-sm text-gray-500">{seller.shopPhone || "Chưa có SĐT"}</div>
+                    <div className="font-medium text-gray-900">{seller.shopName || "No name set"}</div>
+                    <div className="text-sm text-gray-500">{seller.shopPhone || "No phone set"}</div>
                   </td>
                   <td className="px-6 py-4 text-gray-600">{seller.email}</td>
                   <td className="px-6 py-4 text-center">{seller._count.products}</td>
@@ -150,7 +150,7 @@ const AdminSellersPage = () => {
                         href={`/admin/sellers/${seller.id}`}
                         className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg"
                       >
-                        Chi tiết
+                        Details
                       </Link>
                       {seller.shopStatus === "PENDING" && (
                         <button
@@ -158,7 +158,7 @@ const AdminSellersPage = () => {
                           onClick={() => handleApprove(seller.id)}
                           className="px-3 py-1 text-sm bg-green-500 hover:bg-green-600 text-white rounded-lg"
                         >
-                          Duyệt
+                          Approve
                         </button>
                       )}
                       {seller.shopStatus === "ACTIVE" && (
@@ -167,7 +167,7 @@ const AdminSellersPage = () => {
                           onClick={() => handleSuspend(seller.id)}
                           className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg"
                         >
-                          Tạm ngưng
+                          Suspend
                         </button>
                       )}
                       {seller.shopStatus === "SUSPENDED" && (
@@ -176,7 +176,7 @@ const AdminSellersPage = () => {
                           onClick={() => handleApprove(seller.id)}
                           className="px-3 py-1 text-sm bg-green-500 hover:bg-green-600 text-white rounded-lg"
                         >
-                          Kích hoạt lại
+                          Reactivate
                         </button>
                       )}
                     </div>

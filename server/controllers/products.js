@@ -154,12 +154,36 @@ function buildSafeFilterObject(filterArray) {
  */
 const getAllProducts = asyncHandler(async (request, response) => {
   const mode = request.query.mode || "";
-  
-  // Admin mode: Return all products without pagination/filtering
-  // Used in admin dashboard where all products need to be displayed
+
+  // Admin mode: Return products with pagination (max 100 per page)
+  // Used in admin dashboard with paginated results
   if(mode === "admin"){
-    const adminProducts = await prisma.product.findMany({});
-    return response.json(adminProducts);
+    const page = Math.max(parseInt(request.query.page) || 1, 1);
+    const limit = Math.min(parseInt(request.query.limit) || 50, 100);
+    const skip = (page - 1) * limit;
+
+    const [adminProducts, total] = await Promise.all([
+      prisma.product.findMany({
+        skip,
+        take: limit,
+        include: {
+          category: { select: { id: true, name: true } },
+          seller: { select: { id: true, shopName: true } }
+        },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.product.count()
+    ]);
+
+    return response.json({
+      products: adminProducts,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
   } else {
     // Customer mode: Apply filtering, sorting, and pagination
     const dividerLocation = request.url.indexOf("?");
@@ -340,28 +364,6 @@ const getAllProducts = asyncHandler(async (request, response) => {
 });
 
 /**
- * GET /api/products/search?query=xxx
- * 
- * Legacy search function (deprecated, use /api/search instead)
- * Searches products by title or description
- * 
- * @param {Request} request - Express request object with query parameter
- * @param {Response} response - Express response object
- */
-const getAllProductsOld = asyncHandler(async (request, response) => {
-  const products = await prisma.product.findMany({
-    include: {
-      category: {
-        select: {
-          name: true,
-        },
-      },
-    },
-  });
-  response.status(200).json(products);
-});
-
-/**
  * POST /api/products
  * 
  * Creates a new product
@@ -383,7 +385,7 @@ const getAllProductsOld = asyncHandler(async (request, response) => {
  */
 const createProduct = asyncHandler(async (request, response) => {
   const {
-    merchantId,
+    sellerId,
     slug,
     title,
     mainImage,
@@ -399,11 +401,11 @@ const createProduct = asyncHandler(async (request, response) => {
   if (!title) {
     throw new AppError("Missing required field: title", 400);
   }
-  
-  if (!merchantId) {
-    throw new AppError("Missing required field: merchantId", 400);
+
+  if (!sellerId) {
+    throw new AppError("Missing required field: sellerId", 400);
   }
-  
+
   if (!slug) {
     throw new AppError("Missing required field: slug", 400);
   }
@@ -419,7 +421,7 @@ const createProduct = asyncHandler(async (request, response) => {
   // Create product in database
   const product = await prisma.product.create({
     data: {
-      merchantId,
+      sellerId,
       slug,
       title,
       mainImage,
@@ -432,7 +434,7 @@ const createProduct = asyncHandler(async (request, response) => {
       status: status || "DRAFT",
     },
   });
-  
+
   return response.status(201).json(product);
 });
 
@@ -448,7 +450,7 @@ const createProduct = asyncHandler(async (request, response) => {
 const updateProduct = asyncHandler(async (request, response) => {
   const { id } = request.params;
   const {
-    merchantId,
+    sellerId,
     slug,
     title,
     mainImage,
@@ -479,7 +481,7 @@ const updateProduct = asyncHandler(async (request, response) => {
 
   const updateData = {};
 
-  if (merchantId !== undefined) updateData.merchantId = merchantId;
+  if (sellerId !== undefined) updateData.sellerId = sellerId;
   if (title !== undefined) updateData.title = title;
   if (mainImage !== undefined) updateData.mainImage = mainImage;
   if (slug !== undefined) updateData.slug = slug;
@@ -528,15 +530,15 @@ const deleteProduct = asyncHandler(async (request, response) => {
     throw new AppError("Product not found", 404);
   }
 
-  // Check for related order records
+  // Check for related order records using Order_item (not SubOrder)
   // Products with orders cannot be deleted to maintain order history
-  const relatedOrderProducts = await prisma.subOrderProduct.findMany({
+  const relatedOrderItems = await prisma.order_item.count({
     where: {
       productId: id,
     },
   });
-  
-  if(relatedOrderProducts.length > 0){
+
+  if (relatedOrderItems > 0) {
     throw new AppError("Cannot delete product because it has order records", 400);
   }
 
@@ -566,20 +568,18 @@ const searchProducts = asyncHandler(async (request, response) => {
     throw new AppError("Query parameter is required", 400);
   }
 
-  // Search in title and description fields
+  // Search in title and description fields (removed mode: "insensitive" - not supported in MySQL)
   const products = await prisma.product.findMany({
     where: {
       OR: [
         {
           title: {
             contains: query,
-            mode: "insensitive",
           },
         },
         {
           description: {
             contains: query,
-            mode: "insensitive",
           },
         },
       ],

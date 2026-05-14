@@ -7,7 +7,8 @@ import Link from "next/link";
 import { FaCheck, FaClock, FaTimes, FaStore } from "react-icons/fa";
 import QuantityInputCart from "@/components/QuantityInputCart";
 import { sanitize } from "@/lib/sanitize";
-import { useEffect, useMemo } from "react";
+import { useMemo, useState } from "react";
+import { ShoppingCart, Trash2, ArrowRight, Package } from "lucide-react";
 
 export const CartModule = () => {
   const {
@@ -20,278 +21,250 @@ export const CartModule = () => {
     clearCart,
   } = useProductStore();
 
-  // Lấy danh sách nhóm theo merchant (memoized)
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
   const cartGroups = useMemo(() => getCartGroups(), [products]);
 
-  // Tính tổng đơn hàng (memoized)
   const cartTotals = useMemo(() => {
     const subtotal = total;
-    const estimatedShipping = cartGroups.reduce((sum, g) => sum + g.shippingFee, 0);
+    const estimatedShipping = cartGroups.reduce((sum, g) => sum + (g.shippingFee || 50000), 0);
     const tax = Math.round(subtotal * 0.05);
     const grandTotal = subtotal + estimatedShipping + tax;
     return { subtotal, estimatedShipping, tax, grandTotal };
   }, [cartGroups, total]);
 
-  // Xử lý xóa sản phẩm
-  const handleRemoveItem = (id: string, title?: string) => {
+  const handleRemoveItem = async (id: string, title?: string) => {
+    setRemovingId(id);
+    await new Promise(resolve => setTimeout(resolve, 200));
     removeFromCart(id);
-    toast.success(`${title || "Product"} removed from cart`);
+    toast.success(`${title || "Product"} removed`);
+    setRemovingId(null);
   };
 
-  // Xử lý thay đổi số lượng
   const handleQuantityChange = (id: string, amount: number) => {
+    if (amount < 1) return;
     updateCartAmount(id, amount);
   };
 
-  // Xử lý xóa toàn bộ giỏ hàng
   const handleClearCart = () => {
     if (products.length === 0) return;
-    if (window.confirm("Are you sure you want to clear your cart?")) {
-      clearCart();
-      toast.success("Cart cleared");
-    }
+    toast.success("Cart cleared");
+    clearCart();
+  };
+
+  const formatPrice = (cents: number) => {
+    return `$${(cents / 100).toFixed(2)}`;
   };
 
   return (
-    <form className="mt-12 lg:grid lg:grid-cols-12 lg:items-start lg:gap-x-12 xl:gap-x-16">
-      <section aria-labelledby="cart-heading" className="lg:col-span-7">
-        <h2 id="cart-heading" className="sr-only">
-          Items in your shopping cart
-        </h2>
+    <div className="lg:grid lg:grid-cols-12 lg:items-start lg:gap-x-12 xl:gap-x-16">
+      {/* Left: Cart Items */}
+      <section className="lg:col-span-7">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-semibold text-gray-800">
+            Items in Cart {cartGroups.length > 0 && `(${allQuantity})`}
+          </h2>
+          {cartGroups.length > 0 && (
+            <button
+              onClick={handleClearCart}
+              className="text-sm text-red-600 hover:text-red-700 flex items-center gap-1.5 transition-colors font-medium"
+            >
+              <Trash2 className="w-4 h-4" />
+              Remove All
+            </button>
+          )}
+        </div>
 
-        {/* Giỏ hàng trống */}
+        {/* Empty Cart */}
         {cartGroups.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">🛒</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Your cart is empty
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
+            <div className="w-20 h-20 mx-auto mb-6 bg-purple-50 rounded-full flex items-center justify-center">
+              <ShoppingCart className="w-10 h-10 text-purple-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">
+              Your Cart is Empty
             </h3>
             <p className="text-gray-500 mb-6">
-              Add some products to get started!
+              Add some products to your cart to continue shopping!
             </p>
             <Link
               href="/shop"
-              className="inline-block bg-blue-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-500 text-white font-medium rounded-xl hover:from-purple-700 hover:to-cyan-600 transition-colors shadow-md hover:shadow-lg"
             >
-              Browse Products
+              <Package className="w-5 h-5" />
+              Explore Products
             </Link>
           </div>
         ) : (
-          <>
-            {/* Nút xóa toàn bộ giỏ hàng */}
-            <div className="flex justify-end mb-4">
-              <button
-                type="button"
-                onClick={handleClearCart}
-                className="text-sm text-red-600 hover:text-red-800 hover:underline"
-              >
-                Clear Cart
-              </button>
-            </div>
-
-            {/* Danh sách sản phẩm theo merchant */}
+          <div className="space-y-6">
             {cartGroups.map((group: CartGroup) => (
-              <div key={group.merchantId} className="mb-6">
+              <div key={group.merchantId} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden transition-all">
                 {/* Merchant Header */}
-                <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-t-lg px-4 py-3">
-                  <FaStore className="text-blue-500" />
-                  <span className="text-sm font-medium text-blue-900">
-                    {group.merchantName}
-                  </span>
-                  <span className="ml-auto text-xs text-blue-600">
-                    {group.items.length} item{group.items.length > 1 ? "s" : ""}
+                <div className="flex items-center gap-3 bg-gradient-to-r from-purple-50 to-cyan-50 px-5 py-4 border-b border-gray-100">
+                  <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                    <FaStore className="text-purple-600" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-semibold text-gray-800">{group.merchantName}</span>
+                  </div>
+                  <span className="px-2.5 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
+                    {group.items.length} items
                   </span>
                 </div>
 
                 {/* Product List */}
-                <ul className="divide-y divide-gray-200 border-x border-b border-gray-200 bg-white rounded-b-lg">
+                <div className="divide-y divide-gray-100">
                   {group.items.map((product) => (
-                    <li
+                    <div
                       key={product.id}
-                      className="flex py-6 sm:py-10 px-4"
+                      className={`p-5 flex gap-5 hover:bg-gray-50/50 transition-colors ${
+                        removingId === product.id ? "opacity-50" : ""
+                      }`}
                     >
-                      <div className="flex-shrink-0">
+                      {/* Image */}
+                      <Link href={`/product/${product.slug || product.id}`} className="flex-shrink-0">
                         <Image
-                          width={192}
-                          height={192}
-                          src={
-                            product?.image
-                              ? `/${product.image}`
-                              : "/product_placeholder.jpg"
-                          }
+                          width={120}
+                          height={120}
+                          src={product?.image ? `/${product.image}` : "/product_placeholder.jpg"}
                           alt={sanitize(product.title)}
-                          className="h-24 w-24 rounded-md object-cover object-center sm:h-48 sm:w-48"
+                          className="w-24 h-24 rounded-xl object-cover"
                         />
-                      </div>
+                      </Link>
 
-                      <div className="ml-4 flex flex-1 flex-col justify-between sm:ml-6">
-                        <div className="relative pr-9 sm:grid sm:grid-cols-2 sm:gap-x-6 sm:pr-0">
-                          <div>
-                            <div className="flex justify-between">
-                              <h3 className="text-sm">
-                                <Link
-                                  href={`/product/${product.slug || product.id}`}
-                                  className="font-medium text-gray-700 hover:text-gray-800"
-                                >
-                                  {sanitize(product.title)}
-                                </Link>
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between gap-4">
+                          <div className="flex-1">
+                            <Link href={`/product/${product.slug || product.id}`}>
+                              <h3 className="font-medium text-gray-800 hover:text-purple-600 transition-colors line-clamp-2">
+                                {sanitize(product.title)}
                               </h3>
-                            </div>
-                            <p className="mt-1 text-sm font-medium text-gray-900">
-                              ${(product.price / 100).toFixed(2)}
+                            </Link>
+                            <p className="text-lg font-bold text-purple-600 mt-1">
+                              {formatPrice(product.price)}
                             </p>
                           </div>
+                          <button
+                            onClick={() => handleRemoveItem(product.id, product.title)}
+                            disabled={removingId === product.id}
+                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            <FaTimes className="w-5 h-5" />
+                          </button>
+                        </div>
 
-                          <div className="mt-4 sm:mt-0 sm:pr-9">
+                        <div className="flex items-center justify-between mt-4">
+                          {/* Stock Status */}
+                          <div className="flex items-center gap-2 text-sm">
+                            {product.amount <= 10 ? (
+                              <>
+                                <FaCheck className="w-4 h-4 text-green-500" />
+                                <span className="text-green-600">In Stock</span>
+                              </>
+                            ) : (
+                              <>
+                                <FaClock className="w-4 h-4 text-gray-400" />
+                                <span className="text-gray-500">Delivery in 3 days</span>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Quantity & Subtotal */}
+                          <div className="flex items-center gap-4">
                             <QuantityInputCart
                               product={product}
-                              onQuantityChange={(amount) =>
-                                handleQuantityChange(product.id, amount)
-                              }
+                              onQuantityChange={(amount) => handleQuantityChange(product.id, amount)}
                             />
-                            <div className="absolute right-0 top-0">
-                              <button
-                                onClick={() =>
-                                  handleRemoveItem(product.id, product.title)
-                                }
-                                type="button"
-                                className="-m-2 inline-flex p-2 text-gray-400 hover:text-gray-500"
-                              >
-                                <span className="sr-only">Remove</span>
-                                <FaTimes className="h-5 w-5" aria-hidden="true" />
-                              </button>
+                            <div className="text-right">
+                              <p className="text-xs text-gray-500">Subtotal</p>
+                              <p className="font-semibold text-gray-800">
+                                {formatPrice(product.amount * product.price)}
+                              </p>
                             </div>
                           </div>
                         </div>
-
-                        <div className="mt-4 flex items-center justify-between">
-                          <p className="flex space-x-2 text-sm text-gray-700">
-                            {product.amount <= 10 ? (
-                              <FaCheck
-                                className="h-5 w-5 flex-shrink-0 text-green-500"
-                                aria-hidden="true"
-                              />
-                            ) : (
-                              <FaClock
-                                className="h-5 w-5 flex-shrink-0 text-gray-300"
-                                aria-hidden="true"
-                              />
-                            )}
-                            <span>
-                              {product.amount <= 10 ? "In stock" : "Ships in 3 days"}
-                            </span>
-                          </p>
-                          <p className="text-sm font-medium text-gray-900">
-                            Subtotal:{" "}
-                            ${((product.amount * product.price) / 100).toFixed(2)}
-                          </p>
-                        </div>
                       </div>
-                    </li>
+                    </div>
                   ))}
-                </ul>
+                </div>
 
                 {/* Merchant Subtotal */}
-                <div className="flex justify-between items-center bg-gray-50 border-x border-b border-gray-200 px-4 py-3 rounded-b-lg">
-                  <span className="text-sm text-gray-600">
-                    Subtotal from {group.merchantName}
-                  </span>
-                  <span className="text-sm font-medium text-gray-900">
-                    ${(group.subtotal / 100).toFixed(2)}
-                  </span>
+                <div className="flex justify-between items-center bg-gray-50 px-5 py-4 border-t border-gray-100">
+                  <span className="text-sm text-gray-600">Subtotal from {group.merchantName}</span>
+                  <span className="font-semibold text-gray-800">{formatPrice(group.subtotal)}</span>
                 </div>
               </div>
             ))}
-          </>
+          </div>
         )}
       </section>
 
-      {/* Order Summary */}
-      <section
-        aria-labelledby="summary-heading"
-        className="mt-16 rounded-lg bg-gray-50 px-4 py-6 sm:p-6 lg:col-span-5 lg:mt-0 lg:p-8"
-      >
-        <h2
-          id="summary-heading"
-          className="text-lg font-medium text-gray-900"
-        >
-          Order summary
-        </h2>
+      {/* Right: Order Summary */}
+      <section className="lg:col-span-5 mt-8 lg:mt-0">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden sticky top-24">
+          <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-purple-50 to-cyan-50">
+            <h2 className="text-lg font-semibold text-gray-800">Order Summary</h2>
+            {cartGroups.length > 0 && (
+              <p className="text-sm text-gray-600 mt-1">
+                Shipping from {cartGroups.length} stores
+              </p>
+            )}
+          </div>
 
-        {/* Merchant count */}
-        {cartGroups.length > 0 && (
-          <div className="mt-4 text-sm text-gray-600">
-            <p>
-              Shipping from {cartGroups.length} shop
-              {cartGroups.length > 1 ? "s" : ""}
-            </p>
-          </div>
-        )}
+          <div className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">
+                Subtotal ({allQuantity} items)
+              </span>
+              <span className="font-medium text-gray-800">{formatPrice(cartTotals.subtotal)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Shipping</span>
+              <span className="font-medium text-gray-800">{formatPrice(cartTotals.estimatedShipping)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Tax (5%)</span>
+              <span className="font-medium text-gray-800">{formatPrice(cartTotals.tax)}</span>
+            </div>
+            <div className="border-t border-gray-200 pt-4 flex items-center justify-between">
+              <span className="text-lg font-semibold text-gray-800">Total</span>
+              <span className="text-2xl font-bold text-purple-600">{formatPrice(cartTotals.grandTotal)}</span>
+            </div>
 
-        <dl className="mt-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <dt className="text-sm text-gray-600">
-              Subtotal ({allQuantity} items)
-            </dt>
-            <dd className="text-sm font-medium text-gray-900">
-              ${(cartTotals.subtotal / 100).toFixed(2)}
-            </dd>
-          </div>
-          <div className="flex items-center justify-between">
-            <dt className="flex items-center text-sm text-gray-600">
-              <span>Shipping estimate</span>
-            </dt>
-            <dd className="text-sm font-medium text-gray-900">
-              ${(cartTotals.estimatedShipping / 100).toFixed(2)}
-            </dd>
-          </div>
-          <div className="flex items-center justify-between">
-            <dt className="flex items-center text-sm text-gray-600">
-              <span>Tax estimate (5%)</span>
-            </dt>
-            <dd className="text-sm font-medium text-gray-900">
-              ${(cartTotals.tax / 100).toFixed(2)}
-            </dd>
-          </div>
-          <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-            <dt className="text-base font-medium text-gray-900">Order total</dt>
-            <dd className="text-base font-medium text-gray-900">
-              ${(cartTotals.grandTotal / 100).toFixed(2)}
-            </dd>
-          </div>
-        </dl>
+            {products.length > 0 && (
+              <Link
+                href="/checkout"
+                className="w-full mt-6 py-3.5 bg-gradient-to-r from-purple-600 to-cyan-500 text-white font-semibold rounded-xl hover:from-purple-700 hover:to-cyan-600 transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
+              >
+                Proceed to Checkout
+                <ArrowRight className="w-5 h-5" />
+              </Link>
+            )}
 
-        {products.length > 0 && (
-          <div className="mt-6">
-            <Link
-              href="/checkout"
-              className="block flex justify-center items-center w-full uppercase bg-white px-4 py-3 text-base border border-black border-gray-300 font-bold text-blue-600 shadow-sm hover:bg-black hover:bg-gray-100 focus:outline-none focus:ring-2"
-            >
-              <span>Checkout</span>
-            </Link>
-          </div>
-        )}
+            {/* Multi-merchant notice */}
+            {cartGroups.length > 1 && (
+              <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                <p className="text-sm text-amber-800">
+                  Your order will be split into {cartGroups.length} sub-orders,
+                  each shipped separately by the respective store.
+                </p>
+              </div>
+            )}
 
-        {/* Multi-merchant notice */}
-        {cartGroups.length > 1 && (
-          <div className="mt-4 text-xs text-gray-500 text-center">
-            <p>
-              Your order will be split into {cartGroups.length} sub-orders,
-              one for each shop. Each shop will ship their items separately.
-            </p>
+            {/* Continue Shopping */}
+            <div className="text-center pt-2">
+              <Link
+                href="/shop"
+                className="text-sm text-purple-600 hover:text-purple-700 font-medium inline-flex items-center gap-1 transition-colors"
+              >
+                Continue Shopping
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
           </div>
-        )}
-
-        {/* Continue shopping */}
-        <div className="mt-4 text-center">
-          <Link
-            href="/shop"
-            className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
-          >
-            or Continue Shopping
-          </Link>
         </div>
       </section>
-    </form>
+    </div>
   );
 };

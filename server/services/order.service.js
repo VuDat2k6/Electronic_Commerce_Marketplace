@@ -1,5 +1,6 @@
 // ============================================
 // Order Service - Handle multi-merchant order creation and queries
+// Uses Order_item model (NOT SubOrder/SubOrderProduct)
 // ============================================
 const { PrismaClient } = require("@prisma/client");
 
@@ -12,7 +13,7 @@ try {
 }
 
 /**
- * Create customer order (supports multi-merchant split orders)
+ * Create customer order with Order_item records
  * @param {Object} orderData - Order data
  * @returns {Promise<Object>} Created order object
  */
@@ -34,25 +35,43 @@ async function createCustomerOrder(orderData) {
     voucherCodes = []
   } = orderData;
 
-  // Generate unique order ID
-  const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-
-  // Group items by merchant ID
-  const itemsByMerchant = {};
-  for (const item of items) {
-    const merchantId = item.merchantId || "default";
-    if (!itemsByMerchant[merchantId]) {
-      itemsByMerchant[merchantId] = [];
-    }
-    itemsByMerchant[merchantId].push(item);
-  }
-
-  // Use transaction to create order and sub-orders
+  // Use transaction to create order and order_items
   const result = await prisma.$transaction(async (tx) => {
+    // Calculate total and group items by seller
+    let totalOrderAmount = 0;
+    const itemsBySeller = {};
+
+    // First pass: validate and group items
+    for (const item of items) {
+      const productId = item.productId || item.id;
+      const sellerId = item.sellerId;
+      const quantity = item.quantity;
+
+      const product = await tx.product.findUnique({
+        where: { id: productId },
+        select: { price: true, sellerId: true }
+      });
+
+      if (product) {
+        const resolvedSellerId = sellerId || product.sellerId;
+        if (!itemsBySeller[resolvedSellerId]) {
+          itemsBySeller[resolvedSellerId] = [];
+        }
+        const unitPrice = item.unitPrice || product.price;
+        itemsBySeller[resolvedSellerId].push({
+          productId,
+          sellerId: resolvedSellerId,
+          quantity,
+          unitPrice
+        });
+        totalOrderAmount += unitPrice * quantity;
+      }
+    }
+
     // 1. Create parent order
     const customerOrder = await tx.customer_order.create({
       data: {
-        id: orderId,
+        buyerId: customerId || null,
         name: name || "",
         lastname: lastname || "",
         phone: phone || "",
@@ -64,82 +83,34 @@ async function createCustomerOrder(orderData) {
         city: city || "",
         country: country || "",
         orderNotice: orderNotice || "",
-        status: "PENDING",
-        total: 0, // Will be updated after sub-order totals are calculated
+        status: "processing",
+        total: totalOrderAmount,
         dateTime: new Date()
       }
     });
 
-    let totalOrderAmount = 0;
-
-    // 2. Create one sub-order for each merchant
-    for (const [merchantId, merchantItems] of Object.entries(itemsByMerchant)) {
-      // Get merchant info
-      const merchant = await tx.merchant.findUnique({
-        where: { id: merchantId }
-      }).catch(() => null);
-
-      // Calculate sub-order subtotal
-      let subTotal = 0;
-      for (const item of merchantItems) {
-        const productId = item.productId || item.id;
-        const product = await tx.product.findUnique({
-          where: { id: productId }
-        }).catch(() => null);
-
-        if (product) {
-          const unitPrice = item.unitPrice || product.price;
-          subTotal += unitPrice * item.quantity;
-        }
-      }
-
-      // Calculate shipping fee
-      const shippingFee = merchant?.shippingFee || 0;
-
-      // Create sub-order
-      const subOrder = await tx.subOrder.create({
-        data: {
-          parentOrderId: customerOrder.id,
-          merchantId: merchantId,
-          status: "PENDING",
-          subTotal: subTotal,
-          shippingTotal: shippingFee
-        }
-      });
-
-      // 3. Create sub-order product records
-      for (const item of merchantItems) {
-        const productId = item.productId || item.id;
-        const product = await tx.product.findUnique({
-          where: { id: productId }
+    // 2. Create order_items for each product
+    for (const [, sellerItems] of Object.entries(itemsBySeller)) {
+      for (const item of sellerItems) {
+        await tx.order_item.create({
+          data: {
+            orderId: customerOrder.id,
+            productId: item.productId,
+            sellerId: item.sellerId,
+            quantity: item.quantity,
+            priceAtPurchase: item.unitPrice
+          }
         });
 
-        if (product) {
-          await tx.subOrderProduct.create({
-            data: {
-              subOrderId: subOrder.id,
-              productId: product.id,
-              quantity: item.quantity,
-              productNameSnapshot: product.title,
-              productImageSnapshot: product.mainImage,
-              unitPriceSnapshot: item.unitPrice || product.price,
-              merchantIdSnapshot: product.merchantId,
-              merchantNameSnapshot: merchant?.name || "Unknown"
-            }
-          });
-        }
+        // 3. Decrement product stock
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { inStock: { decrement: item.quantity } }
+        }).catch(() => {}); // Ignore if product doesn't exist
       }
-
-      totalOrderAmount += subTotal + shippingFee;
     }
 
-    // 4. Update parent order total
-    const updatedOrder = await tx.customer_order.update({
-      where: { id: customerOrder.id },
-      data: { total: totalOrderAmount }
-    });
-
-    // 5. Handle vouchers if provided
+    // 4. Handle vouchers if provided
     if (voucherCodes && voucherCodes.length > 0) {
       for (const code of voucherCodes) {
         const voucher = await tx.voucher.findUnique({
@@ -147,7 +118,6 @@ async function createCustomerOrder(orderData) {
         }).catch(() => null);
 
         if (voucher && voucher.isActive) {
-          // Record voucher usage
           await tx.voucherUsage.create({
             data: {
               voucherId: voucher.id,
@@ -157,7 +127,6 @@ async function createCustomerOrder(orderData) {
             }
           });
 
-          // Increase voucher used count
           await tx.voucher.update({
             where: { id: voucher.id },
             data: { usedCount: { increment: 1 } }
@@ -166,7 +135,7 @@ async function createCustomerOrder(orderData) {
       }
     }
 
-    return updatedOrder;
+    return customerOrder;
   });
 
   return result;
@@ -175,14 +144,13 @@ async function createCustomerOrder(orderData) {
 /**
  * Get customer order list
  * @param {string} customerId - Customer ID
- * @returns {Promise<Object>} Order list
+ * @returns {Promise<Object>} Order list with items
  */
 async function listCustomerOrders(customerId) {
   if (!customerId) {
     throw new Error("Customer ID is required");
   }
 
-  // Find orders by user email because orders store email instead of user ID
   const user = await prisma.user.findUnique({
     where: { id: customerId }
   }).catch(() => null);
@@ -201,30 +169,26 @@ async function listCustomerOrders(customerId) {
 
   const email = user.email;
 
-  // Get all customer orders
+  // Get all customer orders with order_items
   const orders = await prisma.customer_order.findMany({
     where: { email: email },
     include: {
-      subOrders: {
+      items: {
         include: {
-          products: {
-            include: {
-              product: {
-                select: {
-                  id: true,
-                  title: true,
-                  slug: true,
-                  mainImage: true,
-                  price: true
-                }
-              }
-            }
-          },
-          merchant: {
+          product: {
             select: {
               id: true,
-              name: true,
-              avatar: true
+              title: true,
+              slug: true,
+              mainImage: true,
+              price: true
+            }
+          },
+          seller: {
+            select: {
+              id: true,
+              shopName: true,
+              shopStatus: true
             }
           }
         }
@@ -244,56 +208,58 @@ async function listCustomerOrders(customerId) {
     }
   });
 
-  // Add revenue field to each sub-order
-  const enrichedOrders = orders.map((order) => ({
-    ...order,
-    subOrders: order.subOrders.map((subOrder) => ({
-      ...subOrder,
-      revenue: subOrder.subTotal + subOrder.shippingTotal
-    }))
-  }));
-
   return {
-    orders: enrichedOrders,
+    orders,
     pagination: {
       page: 1,
       limit: 20,
-      total: enrichedOrders.length,
+      total: orders.length,
       totalPages: 1
     }
   };
 }
 
 /**
- * Get seller sub-order list
- * @param {string} merchantId - Merchant ID
+ * Get seller order items list (aggregated by order)
+ * @param {string} sellerId - Seller ID
  * @param {Object} options - Query options
- * @returns {Promise<Object>} Sub-order list
+ * @returns {Promise<Object>} Order items list grouped by order
  */
-async function listSellerSubOrders(merchantId, options = {}) {
+async function listSellerOrderItems(sellerId, options = {}) {
   const status = options.status;
   const page = Number(options.page) || 1;
   const limit = Number(options.limit) || 20;
 
-  if (!merchantId) {
-    throw new Error("Merchant ID is required");
-  }
-
-  const where = { merchantId };
-  if (status) {
-    where.status = status;
+  if (!sellerId) {
+    throw new Error("Seller ID is required");
   }
 
   const offset = (page - 1) * limit;
 
-  const [subOrders, total] = await Promise.all([
-    prisma.subOrder.findMany({
+  // Build where clause
+  const where = { sellerId };
+  if (status) {
+    // Status filtering is on the parent order, handled after fetch
+  }
+
+  // Get order items with product and parent order info
+  const [orderItems, total] = await Promise.all([
+    prisma.order_item.findMany({
       where,
       skip: offset,
       take: limit,
-      orderBy: { createdAt: "desc" },
+      orderBy: { order: { dateTime: "desc" } },
       include: {
-        parentOrder: {
+        product: {
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            mainImage: true,
+            price: true
+          }
+        },
+        order: {
           select: {
             id: true,
             name: true,
@@ -309,32 +275,39 @@ async function listSellerSubOrders(merchantId, options = {}) {
             status: true,
             total: true
           }
-        },
-        products: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                title: true,
-                slug: true,
-                mainImage: true
-              }
-            }
-          }
         }
       }
     }),
-    prisma.subOrder.count({ where })
+    prisma.order_item.count({ where })
   ]);
 
-  // Calculate revenue for each sub-order
-  const enrichedSubOrders = subOrders.map((subOrder) => ({
-    ...subOrder,
-    revenue: subOrder.subTotal + subOrder.shippingTotal
-  }));
+  // Group items by order
+  const ordersMap = new Map();
+  for (const item of orderItems) {
+    if (!ordersMap.has(item.orderId)) {
+      ordersMap.set(item.orderId, {
+        order: item.order,
+        items: [],
+        totalRevenue: 0
+      });
+    }
+    const revenue = item.priceAtPurchase * item.quantity;
+    ordersMap.get(item.orderId).items.push({
+      ...item,
+      revenue
+    });
+    ordersMap.get(item.orderId).totalRevenue += revenue;
+  }
+
+  const orders = Array.from(ordersMap.values());
+
+  // Apply status filter if provided
+  const filteredOrders = status
+    ? orders.filter(o => o.order.status.toLowerCase() === status.toLowerCase())
+    : orders;
 
   return {
-    subOrders: enrichedSubOrders,
+    orders: filteredOrders,
     pagination: {
       page,
       limit,
@@ -345,137 +318,93 @@ async function listSellerSubOrders(merchantId, options = {}) {
 }
 
 /**
- * Update sub-order status
- * @param {string} subOrderId - Sub-order ID
+ * Update order item status (marks order as shipped/delivered/cancelled)
+ * @param {string} itemId - Order item ID
  * @param {Object} data - Update payload
- * @returns {Promise<Object>} Updated sub-order
+ * @returns {Promise<Object>} Updated order
  */
-async function updateSubOrderStatus(subOrderId, data) {
-  const { status, trackingNumber, shippingProvider, cancelReason } = data;
+async function updateOrderItemStatus(itemId, data) {
+  const { status } = data;
 
-  const subOrder = await prisma.subOrder.findUnique({
-    where: { id: subOrderId }
+  const orderItem = await prisma.order_item.findUnique({
+    where: { id: itemId },
+    include: { order: true }
   });
 
-  if (!subOrder) {
-    throw new Error("SubOrder not found");
+  if (!orderItem) {
+    throw new Error("Order item not found");
   }
 
-  const updateData = { status };
-
-  // Update related timestamps based on status
-  if (status === "SHIPPED") {
-    updateData.shippedAt = new Date();
-    if (trackingNumber) updateData.trackingNumber = trackingNumber;
-    if (shippingProvider) updateData.shippingProvider = shippingProvider;
-  }
-  if (status === "DELIVERED") {
-    updateData.deliveredAt = new Date();
-  }
-  if (status === "CANCELLED") {
-    updateData.cancelledAt = new Date();
-    if (cancelReason) updateData.cancelReason = cancelReason;
-  }
-
-  // Update sub-order
-  const updated = await prisma.subOrder.update({
-    where: { id: subOrderId },
-    data: updateData
+  // Update parent order status
+  const updated = await prisma.customer_order.update({
+    where: { id: orderItem.orderId },
+    data: { status }
   });
-
-  // Recalculate parent order status
-  await updateParentOrderStatus(subOrder.parentOrderId);
 
   return updated;
 }
 
 /**
- * Update parent order status based on all sub-order statuses
- * @param {string} parentOrderId - Parent order ID
+ * Get seller shop info and their products
+ * @param {string} sellerId - Seller ID (same as User ID)
+ * @returns {Promise<Object>} Seller shop data
  */
-async function updateParentOrderStatus(parentOrderId) {
-  const siblings = await prisma.subOrder.findMany({
-    where: { parentOrderId: parentOrderId },
-    select: { status: true }
-  });
-
-  if (siblings.length === 0) return;
-
-  const allDelivered = siblings.every((s) => s.status === "DELIVERED");
-  const allCancelled = siblings.every((s) => s.status === "CANCELLED");
-  const anyShipped = siblings.some((s) => ["SHIPPED", "DELIVERED"].includes(s.status));
-  const anyPending = siblings.some((s) => ["PENDING", "CONFIRMED", "PROCESSING"].includes(s.status));
-  const anyCancelled = siblings.some((s) => s.status === "CANCELLED");
-
-  let parentStatus = "PROCESSING";
-  if (allDelivered) parentStatus = "COMPLETED";
-  else if (allCancelled) parentStatus = "CANCELLED";
-  else if (anyShipped && anyPending) parentStatus = "PARTIALLY_FULFILLED";
-  else if (anyCancelled) parentStatus = "PARTIALLY_CANCELLED";
-
-  await prisma.customer_order.update({
-    where: { id: parentOrderId },
-    data: { status: parentStatus }
-  });
-}
-
-/**
- * Get merchant shop info and its products
- * @param {string} merchantId - Merchant ID
- * @returns {Promise<Object>} Merchant shop data
- */
-async function getMerchantShop(merchantId) {
-  if (!merchantId) {
-    throw new Error("Merchant ID is required");
+async function getSellerShop(sellerId) {
+  if (!sellerId) {
+    throw new Error("Seller ID is required");
   }
 
-  const merchant = await prisma.merchant.findUnique({
-    where: { id: merchantId },
-    include: {
-      products: {
-        where: { status: "PUBLISHED" },
-        include: {
-          category: {
-            select: { id: true, name: true }
-          },
-          reviews: {
-            select: { rating: true }
-          }
-        }
-      }
+  const seller = await prisma.user.findUnique({
+    where: { id: sellerId },
+    select: {
+      id: true,
+      shopName: true,
+      shopDescription: true,
+      shopPhone: true,
+      shopAddress: true,
+      shopStatus: true,
+      shopApprovedAt: true
     }
   });
 
-  if (!merchant) {
-    throw new Error("Merchant not found");
+  if (!seller || seller.shopStatus !== "ACTIVE") {
+    throw new Error("Seller not found or not active");
   }
 
+  // Get products with category and review info
+  const products = await prisma.product.findMany({
+    where: { sellerId, status: "PUBLISHED" },
+    include: {
+      category: { select: { id: true, name: true } },
+      reviews: { select: { rating: true } }
+    }
+  });
+
   // Calculate average rating
-  const allRatings = merchant.products.flatMap((p) => p.reviews.map((r) => r.rating));
-  const averageRating =
-    allRatings.length > 0
-      ? allRatings.reduce((a, b) => a + b, 0) / allRatings.length
-      : 0;
+  const allRatings = products.flatMap((p) => p.reviews.map((r) => r.rating));
+  const averageRating = allRatings.length > 0
+    ? allRatings.reduce((a, b) => a + b, 0) / allRatings.length
+    : 0;
 
   return {
-    merchant: {
-      id: merchant.id,
-      name: merchant.name,
-      description: merchant.description,
-      avatar: merchant.avatar,
-      banner: merchant.banner,
+    seller: {
+      id: seller.id,
+      shopName: seller.shopName,
+      description: seller.shopDescription,
+      phone: seller.shopPhone,
+      address: seller.shopAddress,
+      status: seller.shopStatus,
       rating: Math.round(averageRating * 10) / 10,
-      totalProducts: merchant.products.length
+      totalProducts: products.length
     },
-    products: merchant.products
+    products
   };
 }
 
 module.exports = {
   createCustomerOrder,
   listCustomerOrders,
-  listSellerSubOrders,
-  updateSubOrderStatus,
-  updateParentOrderStatus,
-  getMerchantShop
+  listSellerOrderItems,
+  updateOrderItemStatus,
+  getSellerShop
 };
