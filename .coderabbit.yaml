@@ -1,0 +1,45 @@
+language: "en"
+early_access: false
+ Reviews:
+  profile: "chamber"
+  request_changes_workflow: true
+  high_level_summary: true
+  auto_title_placeholder: null
+  review_status: true
+  poem: false
+ collapse_walkthrough: false
+  review_status: true
+  seq_len: 16384
+  loop: true
+  allow_listing_random_files: false
+  path_filters:
+    - "!**/.git/**"
+    - "!**/node_modules/**"
+    - "!**/dist/**"
+    - "!**/build/**"
+  path_revisions:
+    - main
+  collaborator_allow_listing: false
+  high_level_summary_placeholder: "@{introduction}"
+ chat:
+  autocomple: true
+  allow_comments: true
+  allow_generation: true
+ auto_title: true
+  version: "1.0"
+voice:
+  mode: "none"
+  allow_subtitles: false
+  allow_generation: false
+  version: "0.0.3"
+  allow_listing_random_files: false
+free_disk_space:
+  enabled: true
+  ignore_paths:
+    - "**/node_modules/**"
+    - "**/dist/**"
+    - "**/build/**"
+    - "**/.git/**"
+    - "**/coverage/**"
+    - "**/.next/**"
+    - "**/server/node_modules/**"
