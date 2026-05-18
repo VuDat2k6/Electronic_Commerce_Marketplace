@@ -5,90 +5,7 @@ import { ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ProductItem } from "./ProductItem";
 import Link from 'next/link';
-
-const mockProducts = [
-  {
-    id: '1',
-    slug: 'iphone-15-pro-max-256gb',
-    title: 'iPhone 15 Pro Max 256GB',
-    price: 29990000,
-    originalPrice: 34990000,
-    rating: 4.8,
-    reviews: 1250,
-    mainImage: 'https://picsum.photos/seed/iphone15/500/500',
-    badge: 'HOT',
-  },
-  {
-    id: '2',
-    slug: 'samsung-galaxy-s24-ultra-512gb',
-    title: 'Samsung Galaxy S24 Ultra 512GB',
-    price: 27990000,
-    originalPrice: 31990000,
-    rating: 4.7,
-    reviews: 980,
-    mainImage: 'https://picsum.photos/seed/samsung24/500/500',
-  },
-  {
-    id: '3',
-    slug: 'macbook-pro-14-m3-pro',
-    title: 'MacBook Pro 14" M3 Pro',
-    price: 52990000,
-    originalPrice: 57990000,
-    rating: 4.9,
-    reviews: 567,
-    mainImage: 'https://picsum.photos/seed/macbook14/500/500',
-    badge: 'NEW',
-  },
-  {
-    id: '4',
-    slug: 'dell-xps-15-9530',
-    title: 'Dell XPS 15 9530',
-    price: 42990000,
-    rating: 4.6,
-    reviews: 423,
-    mainImage: 'https://picsum.photos/seed/dellxps/500/500',
-  },
-  {
-    id: '5',
-    slug: 'sony-wh-1000xm5',
-    title: 'Sony WH-1000XM5',
-    price: 8990000,
-    originalPrice: 10990000,
-    rating: 4.8,
-    reviews: 2340,
-    mainImage: 'https://picsum.photos/seed/sonywh1000/500/500',
-  },
-  {
-    id: '6',
-    slug: 'airpods-pro-usb-c',
-    title: 'AirPods Pro USB-C',
-    price: 6490000,
-    originalPrice: 7490000,
-    rating: 4.7,
-    reviews: 1890,
-    mainImage: 'https://picsum.photos/seed/airpodspro/500/500',
-    badge: 'HOT',
-  },
-  {
-    id: '7',
-    slug: 'apple-watch-series-9',
-    title: 'Apple Watch Series 9',
-    price: 10990000,
-    originalPrice: 12990000,
-    rating: 4.8,
-    reviews: 1456,
-    mainImage: 'https://picsum.photos/seed/applewatch9/500/500',
-  },
-  {
-    id: '8',
-    slug: 'galaxy-watch-6-classic',
-    title: 'Galaxy Watch 6 Classic',
-    price: 8990000,
-    rating: 4.6,
-    reviews: 890,
-    mainImage: 'https://picsum.photos/seed/galaxywatch6/500/500',
-  },
-];
+import { products, Product } from '@/lib/demo-data';
 
 const container = {
   hidden: { opacity: 0 },
@@ -164,6 +81,9 @@ interface ProductsSectionProps {
 }
 
 export function FeaturedProducts() {
+  // Get first 8 featured products from demo data
+  const featuredProducts = products.slice(0, 8);
+
   return (
     <section className="py-16 bg-gradient-to-b from-white to-gray-50">
       <div className="max-w-7xl mx-auto px-4">
@@ -188,7 +108,7 @@ export function FeaturedProducts() {
             />
           </motion.div>
 
-          <Link href="/shop/smart-phones">
+          <Link href="/shop">
             <motion.button
               className="text-purple-600 hover:text-purple-700 font-bold flex items-center gap-2 group bg-purple-50 hover:bg-purple-100 px-6 py-3 rounded-full transition-all duration-300"
               whileHover={{ scale: 1.05 }}
@@ -216,7 +136,7 @@ export function FeaturedProducts() {
           whileInView="show"
           viewport={{ once: true, margin: "-100px" }}
         >
-          {mockProducts.map((product, index) => (
+          {featuredProducts.map((product, index) => (
             <motion.div key={product.id} variants={item}>
               <ProductItem product={product} index={index} />
             </motion.div>
@@ -228,13 +148,15 @@ export function FeaturedProducts() {
 }
 
 export function ProductsSection({
-  products = [],
+  products: customProducts,
   isLoading = false,
   title = "FEATURED PRODUCTS",
-  link = "/shop/smart-phones",
+  link = "/shop",
   linkText = "View All"
 }: ProductsSectionProps) {
-  const displayProducts = products.length > 0 ? products : mockProducts;
+  const displayProducts = customProducts && customProducts.length > 0 
+    ? customProducts 
+    : products.slice(0, 8);
 
   return (
     <section className="py-16 bg-gradient-to-b from-white to-gray-50">
@@ -271,12 +193,7 @@ export function ProductsSection({
               transition={{ duration: 0.6 }}
             >
               {linkText}
-              <motion.div
-                animate={{ x: [0, 5, 0] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              >
-                <ArrowRight className="w-5 h-5" />
-              </motion.div>
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </motion.button>
           </Link>
         </div>

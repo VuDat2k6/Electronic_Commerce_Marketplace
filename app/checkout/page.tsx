@@ -36,7 +36,7 @@ const CheckoutPage = () => {
   const finalTotal = total === 0 ? 0 : total + taxAmount + shippingAmount;
 
   const formatPrice = (amount: number) => {
-    return `$${(amount / 100).toFixed(2)}`;
+    return (amount / 100).toLocaleString('vi-VN') + '₫';
   };
 
   const validateForm = () => {

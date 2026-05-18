@@ -7,6 +7,7 @@
  * - File uploads and image management
  * - Rate limiting and request logging
  * - CORS configuration for frontend access
+ * - Security headers via Helmet.js
  * 
  * @module app
  * @version 1.0.0
@@ -25,12 +26,13 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 // bcryptjs - Library for hashing passwords securely
-// Used for user authentication and password storage
 const bcrypt = require('bcryptjs');
 
 // express-fileupload - Middleware for handling file uploads
-// Supports multipart/form-data for image uploads
 const fileUpload = require("express-fileupload");
+
+// helmet - HTTP security headers
+const helmet = require("helmet");
 
 // ============================================================
 // ROUTES IMPORTS
@@ -125,7 +127,7 @@ const {
 // Error handling utility - Centralized error processing
 const {
   handleServerError
-} = require('./utills/errorHandler');
+} = require('./utils/errorHandler');
 
 // ============================================================
 // EXPRESS APP INITIALIZATION
@@ -143,6 +145,33 @@ const app = express();
  * Required when server is behind a reverse proxy (e.g., Nginx, load balancer)
  */
 app.set('trust proxy', 1);
+
+/**
+ * Helmet.js - Security headers
+ * Sets various HTTP headers for security:
+ * - X-Content-Type-Options: nosniff
+ * - X-Frame-Options: SAMEORIGIN
+ * - X-XSS-Protection: 1; mode=block
+ * - Strict-Transport-Security (HSTS)
+ * - Referrer-Policy
+ * - Content-Security-Policy (configured below)
+ */
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 
 /**
  * Add unique request ID to each request
@@ -410,13 +439,13 @@ app.get('/health', (req, res) => {
  */
 app.get('/rate-limit-info', (req, res) => {
   res.status(200).json({
-    general: '300 requests per 15 minutes',
-    auth: '300 login attempts per 15 minutes',
-    register: '20 registrations per hour',
-    upload: '300 uploads per 15 minutes',
-    search: '300 searches per minute',
-    orders: '300 order operations per 15 minutes',
-    users: '300 requests per 15 minutes',
+    general: '100 requests per 15 minutes',
+    auth: '5 login attempts per 15 minutes (STRICT)',
+    register: '10 registrations per hour',
+    upload: '20 uploads per 15 minutes',
+    search: '30 searches per minute',
+    orders: '30 order operations per 15 minutes',
+    users: '50 requests per 15 minutes',
     requestId: req.reqId
   });
 });

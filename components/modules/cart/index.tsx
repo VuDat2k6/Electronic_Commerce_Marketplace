@@ -51,7 +51,9 @@ export const CartModule = () => {
     clearCart();
   };
 
-  const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+  const formatPrice = (cents: number) => {
+    return (cents / 100).toLocaleString('vi-VN') + '₫';
+  };
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">

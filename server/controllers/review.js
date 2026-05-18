@@ -14,7 +14,7 @@
  * @module controllers/review
  */
 
-const prisma = require("../utills/db");
+const prisma = require("../utils/db");
 
 // ============================================================
 // CREATE REVIEW

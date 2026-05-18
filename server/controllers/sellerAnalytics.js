@@ -1,7 +1,7 @@
 // server/controllers/sellerAnalytics.js
 // Optimized: Uses database aggregation instead of fetching all data to memory
-const prisma = require('../utills/db');
-const { asyncHandler } = require('../utills/errorHandler');
+const prisma = require('../utils/db');
+const { asyncHandler } = require('../utils/errorHandler');
 
 // GET /api/seller/analytics/overview?sellerId=xxx
 const getSellerAnalytics = asyncHandler(async (req, res) => {

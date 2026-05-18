@@ -1,4 +1,4 @@
-const prisma = require("../utills/db"); /**
+const prisma = require("../utils/db"); /**
  * Handle a request for a product identified by its slug and return the product including its category.
  *
  * Validates the `slug` route parameter (must be a string of length ≤ 200). Responds with 400 and `{ error: "Invalid slug" }` for invalid input, 404 and `{ error: "Product not found" }` if no matching product exists, or 200 with the product object (including its `category`) on success.

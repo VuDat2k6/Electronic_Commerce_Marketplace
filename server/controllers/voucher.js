@@ -17,7 +17,7 @@
  * @module controllers/voucher
  */
 
-const prisma = require("../utills/db");
+const prisma = require("../utils/db");
 
 // ============================================================
 // CREATE VOUCHER

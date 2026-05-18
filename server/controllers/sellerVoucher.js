@@ -1,6 +1,6 @@
 // server/controllers/sellerVoucher.js
-const prisma = require('../utills/db');
-const { asyncHandler } = require('../utills/errorHandler');
+const prisma = require('../utils/db');
+const { asyncHandler } = require('../utils/errorHandler');
 
 // GET /api/seller/vouchers?sellerId=xxx
 const getSellerVouchers = asyncHandler(async (req, res) => {

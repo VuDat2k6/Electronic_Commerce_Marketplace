@@ -7,7 +7,7 @@ const { PrismaClient } = require("@prisma/client");
 // Use shared Prisma client instance
 let prisma;
 try {
-  prisma = require("../utills/db");
+  prisma = require("../utils/db");
 } catch (e) {
   prisma = new PrismaClient();
 }

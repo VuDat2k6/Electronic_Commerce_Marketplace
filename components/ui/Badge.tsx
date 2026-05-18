@@ -1,71 +1,46 @@
-"use client";
+import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
+import { cva, type VariantProps } from "class-variance-authority";
 
-interface BadgeProps {
-  children: React.ReactNode;
-  variant?: "default" | "success" | "warning" | "danger" | "info" | "purple" | "cyan" | "pink";
-  size?: "sm" | "md";
-  className?: string;
-}
+import { cn } from "./utils";
 
-/**
- * Renders a pill-style badge as a <span> with configurable visual variant and size.
- *
- * @param children - Content displayed inside the badge.
- * @param variant - Visual style key; one of "default", "success", "warning", "danger", "info", "purple", "cyan", "pink". Defaults to "default".
- * @param size - Size key; one of "sm" or "md". Defaults to "md".
- * @param className - Additional CSS classes to apply to the badge container.
- * @returns A JSX <span> element styled as a badge.
- */
-export function Badge({ children, variant = "default", size = "md", className = "" }: BadgeProps) {
-  const variants = {
-    default: "bg-zinc-100 text-zinc-700",
-    success: "bg-green-100 text-green-700",
-    warning: "bg-yellow-100 text-yellow-700",
-    danger: "bg-red-100 text-red-700",
-    info: "bg-cyan-100 text-cyan-700",
-    purple: "bg-purple-100 text-purple-700",
-    cyan: "bg-cyan-100 text-cyan-700",
-    pink: "bg-pink-100 text-pink-700",
-  };
+const badgeVariants = cva(
+  "inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden",
+  {
+    variants: {
+      variant: {
+        default:
+          "border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/90",
+        secondary:
+          "border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90",
+        destructive:
+          "border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+        outline:
+          "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  },
+);
 
-  const sizes = {
-    sm: "px-2 py-0.5 text-xs",
-    md: "px-2.5 py-1 text-xs",
-  };
+function Badge({
+  className,
+  variant,
+  asChild = false,
+  ...props
+}: React.ComponentProps<"span"> &
+  VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
+  const Comp = asChild ? Slot : "span";
 
   return (
-    <span
-      className={`
-        inline-flex items-center font-medium rounded-full
-        ${variants[variant]}
-        ${sizes[size]}
-        ${className}
-      `}
-    >
-      {children}
-    </span>
+    <Comp
+      data-slot="badge"
+      className={cn(badgeVariants({ variant }), className)}
+      {...props}
+    />
   );
 }
 
-/**
- * Render a badge representing the provided status string.
- *
- * The function maps known status codes to a styled variant and human-readable label.
- *
- * @param status - The status code to display (e.g., `"PENDING"`, `"CONFIRMED"`, `"DELIVERED"`). Known codes are mapped to predefined variants and labels; unknown values are shown as the label with the default variant.
- * @returns A `Badge` element configured with a variant and label corresponding to `status`.
- */
-export function StatusBadge({ status }: { status: string }) {
-  const statusMap: Record<string, { variant: BadgeProps["variant"]; label: string }> = {
-    PENDING: { variant: "warning", label: "Pending" },
-    CONFIRMED: { variant: "cyan", label: "Confirmed" },
-    PROCESSING: { variant: "purple", label: "Processing" },
-    SHIPPED: { variant: "cyan", label: "Shipped" },
-    DELIVERED: { variant: "success", label: "Delivered" },
-    CANCELLED: { variant: "danger", label: "Cancelled" },
-  };
-
-  const config = statusMap[status] || { variant: "default", label: status };
-
-  return <Badge variant={config.variant}>{config.label}</Badge>;
-}
+export { Badge, badgeVariants };

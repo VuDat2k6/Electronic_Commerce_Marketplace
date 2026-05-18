@@ -7,7 +7,7 @@
  * - Async route handler wrapper (asyncHandler)
  * - Error logging with context
  * 
- * @module utills/errorHandler
+ * @module utils/errorHandler
  */
 
 // ============================================================
@@ -296,7 +296,7 @@ module.exports = {
 /**
  * USAGE EXAMPLE:
  * 
- * const { AppError, asyncHandler, handleServerError } = require('./utills/errorHandler');
+ * const { AppError, asyncHandler, handleServerError } = require('./utils/errorHandler');
  * 
  * // In routes:
  * router.post('/users', asyncHandler(async (req, res) => {

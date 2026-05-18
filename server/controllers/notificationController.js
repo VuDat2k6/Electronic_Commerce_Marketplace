@@ -14,7 +14,7 @@
  * @module controllers/notificationController
  */
 
-const prisma = require('../utills/db');
+const prisma = require('../utils/db');
 
 /**
  * GET /api/notifications/user/:userId

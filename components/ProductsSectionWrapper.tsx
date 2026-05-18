@@ -1,11 +1,9 @@
-// ProductsSectionWrapper - Uses mock data from ProductsSection
+// ProductsSectionWrapper - Fetches and displays featured products
 "use client";
 
 import { ProductsSection } from "./ProductsSection";
-
-export function ProductsSectionWrapper() {
-  return <ProductsSection />;
-}
+import { Product } from "@/typings.d";
+import { apiClient } from "@/lib/api";
 
 /**
  * Fetches up to four featured products from the products API.
@@ -39,3 +37,5 @@ export async function ProductsSectionWrapper() {
     <ProductsSection products={products} />
   );
 }
+
+export default ProductsSectionWrapper;

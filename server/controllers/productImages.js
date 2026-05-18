@@ -1,4 +1,4 @@
-const prisma = require("../utills/db");
+const prisma = require("../utils/db");
 
 /**
  * Fetches and sends all image records for the product identified by `request.params.id`.

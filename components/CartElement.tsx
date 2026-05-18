@@ -16,7 +16,7 @@ const CartElement = () => {
         whileTap={{ scale: 0.95 }}
         className="relative"
       >
-        <FaCartShopping className="text-2xl text-black group-hover:text-purple-600 transition-colors duration-300" />
+        <FaCartShopping className="text-2xl text-gray-700 group-hover:text-purple-600 transition-colors duration-300" />
         
         {/* Cart Badge with Animation */}
         <AnimatePresence>

@@ -1,6 +1,6 @@
-// server/utills/migrateData.js
+// server/utils/migrateData.js
 // Chạy MỘT LẦN để chuyển data cũ sang schema mới
-// Chạy: node server/utills/migrateData.js
+// Chạy: node server/utils/migrateData.js
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 

@@ -1,4 +1,4 @@
-const prisma = require("../utills/db");
+const prisma = require("../utils/db");
 
 /**
  * Search published products by a user-supplied query across title, description, and manufacturer.

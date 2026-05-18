@@ -32,12 +32,12 @@ const QuantityInput = ({quantityCount, setQuantityCount} : QuantityInputProps) =
 
   return (
     <div className="flex items-center gap-x-4 max-[500px]:justify-center">
-      <p className="text-xl">Quantity: </p>
+      <p className="text-lg font-medium text-gray-700">Quantity:</p>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
         <button
           type="button"
-          className="size-10 leading-10 text-gray-600 transition hover:opacity-75 flex justify-center items-center border"
+          className="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-100 hover:text-purple-600 transition-colors"
           onClick={() => handleQuantityChange("minus")}
         >
           <FaMinus />
@@ -48,12 +48,12 @@ const QuantityInput = ({quantityCount, setQuantityCount} : QuantityInputProps) =
           id="Quantity"
           disabled={true}
           value={quantityCount}
-          className="h-10 w-24 rounded border-gray-200 sm:text-sm"
+          className="h-10 w-16 text-center font-semibold border-x border-gray-200 bg-white"
         />
 
         <button
           type="button"
-          className="size-10 leading-10 text-gray-600 transition hover:opacity-75 flex justify-center items-center border"
+          className="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-100 hover:text-purple-600 transition-colors"
           onClick={() => handleQuantityChange("plus")}
         >
           <FaPlus />

@@ -1,14 +1,13 @@
 /**
  * Rate Limiter Middleware
  * 
- * Provides rate limiting functionality to protect the API from abuse:
+ * Provides rate limiting to protect the API from abuse:
  * - Prevents brute force attacks on authentication endpoints
  * - Limits request volume per IP address
- * - Protects resource-intensive operations (uploads, search)
- * - Different limits for different endpoint types
+ * - Protects resource-intensive operations
  * 
- * Uses express-rate-limit library with configurable windows
- * and request limits for each endpoint category.
+ * All limiters are ALWAYS active (no development skip)
+ * to ensure production-grade protection.
  * 
  * @module middleware/rateLimiter
  */
@@ -16,41 +15,44 @@
 const rateLimit = require('express-rate-limit');
 
 // ============================================================
-// RATE LIMITING STRATEGY
+// RATE LIMITING CONFIGURATION
 // 
 // Each limiter has:
 // - windowMs: Time window for counting requests
 // - max: Maximum requests allowed per window
-// - Message: Error response when limit exceeded
+// - message: Error response when limit exceeded
 // - Headers: Rate limit info returned in response headers
 // ============================================================
 
 // ============================================================
 // GENERAL RATE LIMITER
 // Applies to all API routes by default
-// Base protection for the entire API
 // ============================================================
 
 /**
  * General API rate limiter
  * - Window: 15 minutes
- * - Limit: 300 requests per IP
+ * - Limit: 100 requests per IP
  * 
- * This is the baseline limiter applied to all routes
- * More specific limiters can override for certain endpoints
+ * This is the baseline limiter applied to all routes.
+ * More specific limiters override for certain endpoints.
  */
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300, // Limit each IP to 300 requests per windowMs
+  max: 100, // Limit each IP to 100 requests per windowMs
   message: {
     error: 'Too many requests from this IP, please try again later.',
+    code: 'RATE_LIMIT_EXCEEDED',
     retryAfter: '15 minutes'
   },
   standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  // NEVER skip in development - security must be consistent
+  skip: () => false,
   handler: (req, res) => {
     res.status(429).json({
       error: 'Too many requests from this IP, please try again later.',
+      code: 'RATE_LIMIT_EXCEEDED',
       retryAfter: '15 minutes'
     });
   }
@@ -62,27 +64,29 @@ const generalLimiter = rateLimit({
 // ============================================================
 
 /**
- * Authentication limiter
+ * Authentication limiter (login attempts)
  * - Window: 15 minutes
- * - Limit: 300 login attempts per IP
- * - skipSuccessfulRequests: Don't count successful logins
+ * - Limit: 5 login attempts per IP
  * 
- * Prevents brute force attacks on login endpoints
- * Users who successfully log in don't count against limit
+ * Prevents brute force attacks on login endpoints.
+ * After 5 failed attempts, user must wait 15 minutes.
  */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300, // Limit each IP to 300 login attempts per windowMs
+  max: 5, // Limit each IP to 5 login attempts per windowMs
   message: {
-    error: 'Too many authentication attempts, please try again later.',
+    error: 'Too many authentication attempts. Please try again in 15 minutes.',
+    code: 'AUTH_RATE_LIMIT_EXCEEDED',
     retryAfter: '15 minutes'
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skipSuccessfulRequests: true, // Don't count successful requests
+  skipSuccessfulRequests: false, // Count all attempts (success and failure)
+  skip: () => false,
   handler: (req, res) => {
     res.status(429).json({
-      error: 'Too many authentication attempts, please try again later.',
+      error: 'Too many authentication attempts. Please try again in 15 minutes.',
+      code: 'AUTH_RATE_LIMIT_EXCEEDED',
       retryAfter: '15 minutes'
     });
   }
@@ -91,22 +95,25 @@ const authLimiter = rateLimit({
 /**
  * Registration limiter
  * - Window: 1 hour
- * - Limit: 20 registration attempts per IP
+ * - Limit: 10 registration attempts per IP
  * 
- * Prevents mass account creation and spam registrations
+ * Prevents mass account creation and spam registrations.
  */
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 20, // Limit each IP to 20 registration attempts per hour
+  max: 10, // Limit each IP to 10 registration attempts per hour
   message: {
-    error: 'Too many registration attempts, please try again later.',
+    error: 'Too many registration attempts, please try again in 1 hour.',
+    code: 'REGISTRATION_RATE_LIMIT_EXCEEDED',
     retryAfter: '1 hour'
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => false,
   handler: (req, res) => {
     res.status(429).json({
-      error: 'Too many registration attempts, please try again later.',
+      error: 'Too many registration attempts, please try again in 1 hour.',
+      code: 'REGISTRATION_RATE_LIMIT_EXCEEDED',
       retryAfter: '1 hour'
     });
   }
@@ -120,22 +127,25 @@ const registerLimiter = rateLimit({
 /**
  * User management limiter
  * - Window: 15 minutes
- * - Limit: 300 requests per IP
+ * - Limit: 50 requests per IP
  * 
  * Applies to: /api/users endpoints
  */
 const userManagementLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300, // Limit each IP to 300 requests per windowMs
+  max: 50, // Limit each IP to 50 requests per windowMs
   message: {
     error: 'Too many user management requests, please try again later.',
+    code: 'USER_RATE_LIMIT_EXCEEDED',
     retryAfter: '15 minutes'
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => false,
   handler: (req, res) => {
     res.status(429).json({
       error: 'Too many user management requests, please try again later.',
+      code: 'USER_RATE_LIMIT_EXCEEDED',
       retryAfter: '15 minutes'
     });
   }
@@ -143,29 +153,33 @@ const userManagementLimiter = rateLimit({
 
 // ============================================================
 // FILE UPLOAD LIMITER
-// Moderate limits for file upload operations
+// Strict limits for file upload operations
 // ============================================================
 
 /**
  * Upload limiter
  * - Window: 15 minutes
- * - Limit: 300 uploads per IP
+ * - Limit: 20 uploads per IP
  * 
  * Applies to: /api/images, /api/main-image, /api/bulk-upload
- * Protects against upload-based DoS attacks
+ * Protects against upload-based DoS attacks.
+ * Files are also limited by size in the controller.
  */
 const uploadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300, // Limit each IP to 300 uploads per windowMs
+  max: 20, // Limit each IP to 20 uploads per windowMs
   message: {
     error: 'Too many file uploads, please try again later.',
+    code: 'UPLOAD_RATE_LIMIT_EXCEEDED',
     retryAfter: '15 minutes'
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => false,
   handler: (req, res) => {
     res.status(429).json({
       error: 'Too many file uploads, please try again later.',
+      code: 'UPLOAD_RATE_LIMIT_EXCEEDED',
       retryAfter: '15 minutes'
     });
   }
@@ -179,23 +193,26 @@ const uploadLimiter = rateLimit({
 /**
  * Search limiter
  * - Window: 1 minute
- * - Limit: 300 search requests per IP
+ * - Limit: 30 searches per IP
  * 
  * Applies to: /api/search
- * Shorter window prevents search-based abuse
+ * Shorter window prevents search-based abuse.
  */
 const searchLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 300, // Limit each IP to 300 search requests per minute
+  max: 30, // Limit each IP to 30 search requests per minute
   message: {
-    error: 'Too many search requests, please try again later.',
+    error: 'Too many search requests, please try again in 1 minute.',
+    code: 'SEARCH_RATE_LIMIT_EXCEEDED',
     retryAfter: '1 minute'
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => false,
   handler: (req, res) => {
     res.status(429).json({
-      error: 'Too many search requests, please try again later.',
+      error: 'Too many search requests, please try again in 1 minute.',
+      code: 'SEARCH_RATE_LIMIT_EXCEEDED',
       retryAfter: '1 minute'
     });
   }
@@ -209,23 +226,26 @@ const searchLimiter = rateLimit({
 /**
  * Order limiter
  * - Window: 15 minutes
- * - Limit: 300 order operations per IP
+ * - Limit: 30 order operations per IP
  * 
  * Applies to: /api/orders, /api/order-product
- * Prevents order spam and cart abandonment abuse
+ * Prevents order spam and cart abandonment abuse.
  */
 const orderLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300, // Limit each IP to 300 order operations per windowMs
+  max: 30, // Limit each IP to 30 order operations per windowMs
   message: {
     error: 'Too many order operations, please try again later.',
+    code: 'ORDER_RATE_LIMIT_EXCEEDED',
     retryAfter: '15 minutes'
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => false,
   handler: (req, res) => {
     res.status(429).json({
       error: 'Too many order operations, please try again later.',
+      code: 'ORDER_RATE_LIMIT_EXCEEDED',
       retryAfter: '15 minutes'
     });
   }
@@ -236,26 +256,27 @@ const orderLimiter = rateLimit({
 // ============================================================
 
 module.exports = {
-  generalLimiter,        // General API protection (300/15min)
-  authLimiter,           // Login protection (300/15min)
-  registerLimiter,       // Registration protection (20/hour)
-  userManagementLimiter,  // User API protection (300/15min)
-  uploadLimiter,         // Upload protection (300/15min)
-  searchLimiter,         // Search protection (300/1min)
-  orderLimiter           // Order protection (300/15min)
+  generalLimiter,        // General API protection (100/15min)
+  authLimiter,           // Login protection (5/15min) - STRICT
+  registerLimiter,       // Registration protection (10/hour)
+  userManagementLimiter,  // User API protection (50/15min)
+  uploadLimiter,         // Upload protection (20/15min)
+  searchLimiter,         // Search protection (30/1min)
+  orderLimiter           // Order protection (30/15min)
 };
 
 /**
- * RATE LIMIT HEADERS
+ * RATE LIMIT SUMMARY
  * 
- * When standardHeaders: true, these headers are included in responses:
+ * Endpoint              | Window    | Limit
+ * --------------------- | --------- | -----
+ * General API           | 15 min    | 100
+ * Login (authLimiter)   | 15 min    | 5 (STRICT)
+ * Registration          | 1 hour    | 10
+ * User Management       | 15 min    | 50
+ * File Uploads          | 15 min    | 20
+ * Search                | 1 min     | 30
+ * Orders                | 15 min    | 30
  * 
- * RateLimit-Limit:        Max requests allowed (e.g., 300)
- * RateLimit-Remaining:    Requests remaining in window (e.g., 299)
- * RateLimit-Reset:        Time when window resets (Unix timestamp)
- * 
- * Use these headers client-side to implement:
- * - Retry-After header handling
- * - Request throttling
- * - User-facing rate limit warnings
+ * All limiters are ALWAYS active (no dev skip)
  */

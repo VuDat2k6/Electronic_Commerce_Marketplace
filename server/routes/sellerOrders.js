@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
-const { asyncHandler } = require("../utills/errorHandler");
+const { asyncHandler } = require("../utils/errorHandler");
 
 // ============================================
 // 获取卖家的所有子订单

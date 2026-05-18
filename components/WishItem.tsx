@@ -69,7 +69,7 @@ export default function WishItem({
         <Link href={`/product/${slug || id}`}>
           <h3 className="font-medium text-gray-900 hover:text-blue-600 line-clamp-2">{title}</h3>
         </Link>
-        <p className="font-bold text-gray-900 mt-1">${((price || 0) / 100).toFixed(2)}</p>
+        <p className="font-bold text-gray-900 mt-1">{(price || 0).toLocaleString('vi-VN')}₫</p>
         <p className={`text-xs mt-1 ${isOutOfStock ? "text-red-500" : "text-green-600"}`}>
           {isOutOfStock ? "Out of stock" : "In stock"}
         </p>

@@ -18,7 +18,7 @@ export interface CreateCustomerOrderInput {
   phone?: string;
   email?: string;
   company?: string;
-  adress?: string;
+  address?: string;
   apartment?: string;
   postalCode?: string;
   city?: string;

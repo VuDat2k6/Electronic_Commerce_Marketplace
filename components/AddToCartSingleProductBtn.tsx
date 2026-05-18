@@ -56,7 +56,7 @@ const AddToCartSingleProductBtn = ({ product, quantityCount }: SingleProductBtnP
     <button
       type="button"
       onClick={handleAddToCart}
-      className="btn w-[200px] text-lg border border-gray-300 border-1 font-normal bg-white text-blue-500 hover:bg-blue-500 hover:text-white hover:border-blue-500 hover:scale-110 transition-all uppercase ease-in max-[500px]:w-full"
+      className="w-[200px] text-lg font-semibold border-2 border-purple-600 bg-white text-purple-600 hover:bg-purple-600 hover:text-white transition-all rounded-xl py-3 max-[500px]:w-full shadow-sm hover:shadow-lg"
     >
       Add to cart
     </button>

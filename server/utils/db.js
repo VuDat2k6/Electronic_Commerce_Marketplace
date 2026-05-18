@@ -9,7 +9,7 @@
  * - Enables query logging in development mode
  * - Prevents multiple connections in development (HMR safe)
  * 
- * @module utills/db
+ * @module utils/db
  */
 
 // ============================================================
@@ -17,15 +17,19 @@
 // Handle both server/ and root-level node_modules paths
 // ============================================================
 
-// Try to load Prisma Client from root node_modules first (recommended)
-// Falls back to local node_modules if not available
+// Try to load Prisma Client from local server node_modules first
+// Falls back to root node_modules if not available
 let PrismaClient;
 try {
-    // When running from server/*, resolves to project root node_modules
-    ({ PrismaClient } = require("../../node_modules/@prisma/client"));
-} catch (e) {
-    // Fallback to local node_modules
+    // First try local node_modules in server folder
     ({ PrismaClient } = require("@prisma/client"));
+} catch (e) {
+    // Fallback to root node_modules
+    try {
+        ({ PrismaClient } = require("../../node_modules/@prisma/client"));
+    } catch (e2) {
+        throw new Error('Cannot find @prisma/client. Please run "npm install" and "npx prisma generate" in the server directory.');
+    }
 }
 
 // ============================================================
@@ -86,7 +90,7 @@ if(process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 /**
  * USAGE EXAMPLE:
  * 
- * const prisma = require('./utills/db');
+ * const prisma = require('./utils/db');
  * 
  * // Query all users
  * const users = await prisma.user.findMany();

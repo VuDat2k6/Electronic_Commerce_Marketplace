@@ -5,6 +5,7 @@ import {
   SingleProductDynamicFields,
 } from "@/components";
 import apiClient from "@/lib/api";
+import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import React from "react";
@@ -42,16 +43,18 @@ const SingleProductPage = async ({ params }: SingleProductPageProps) => {
     notFound();
   }
 
-  const formatPrice = (cents: number) => (cents / 100).toFixed(2);
+  const formatPrice = (price: number) => {
+    return (price / 100).toLocaleString('vi-VN') + '₫';
+  };
 
   return (
     <div className="bg-white min-h-screen">
       <div className="max-w-7xl mx-auto px-4 py-8 lg:py-12">
         {/* Breadcrumb */}
         <nav className="text-sm text-gray-500 mb-8">
-          <a href="/" className="hover:text-gray-900">Home</a>
+          <Link href="/" className="hover:text-gray-900">Home</Link>
           <span className="mx-2">/</span>
-          <a href="/shop" className="hover:text-gray-900">Products</a>
+          <Link href="/shop" className="hover:text-gray-900">Products</Link>
           <span className="mx-2">/</span>
           <span className="text-gray-900">{sanitize(product?.title)}</span>
         </nav>
@@ -97,12 +100,12 @@ const SingleProductPage = async ({ params }: SingleProductPageProps) => {
                 {sanitize(product?.title)}
               </h1>
               <p className="text-3xl font-bold text-gray-900">
-                ${formatPrice(product?.price)}
+                {formatPrice(product?.price)}
               </p>
             </div>
 
             {/* Stock */}
-            <StockAvailabillity stock={94} inStock={product?.inStock} />
+            <StockAvailabillity inStock={product?.inStock} />
 
             {/* Dynamic Fields (Quantity, Add to Cart, Buy Now) */}
             <SingleProductDynamicFields product={product} />

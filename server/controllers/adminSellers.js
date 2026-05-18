@@ -1,6 +1,6 @@
 // server/controllers/adminSellers.js
-const prisma = require('../utills/db');
-const { asyncHandler, AppError } = require('../utills/errorHandler');
+const prisma = require('../utils/db');
+const { asyncHandler, AppError } = require('../utils/errorHandler');
 
 // GET /api/admin/sellers
 const getAllSellers = asyncHandler(async (req, res) => {

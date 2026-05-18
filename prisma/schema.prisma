@@ -1,3 +1,17 @@
+// ============================================================
+// TFDTRONIC Electronics eCommerce Marketplace
+// Prisma Schema - Production Ready
+// ============================================================
+// 
+// This is the canonical schema used by both Next.js and Express server.
+// All schema changes should be made here and migrated properly.
+//
+// IMPORTANT: Run migrations after any schema changes
+// - Development: npx prisma db push
+// - Production: npx prisma migrate deploy
+//
+// ============================================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,59 +21,123 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// =====================
-// MODEL USER (đã mở rộng — thay thế cả Merchant)
-// =====================
-model User {
-  id       String  @id @default(uuid())
-  email    String  @unique
-  password String?
-  role     String  @default("buyer")   // "buyer" | "seller" | "admin"
+// ============================================================
+// ENUMS
+// ============================================================
 
-  // Thông tin shop của seller (null nếu role != "seller")
+enum UserRole {
+  buyer
+  seller
+  admin
+}
+
+enum ShopStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum OrderStatus {
+  processing
+  delivered
+  canceled
+}
+
+enum BulkUploadStatus {
+  PENDING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum BulkUploadItemStatus {
+  CREATED
+  UPDATED
+  ERROR
+}
+
+enum NotificationType {
+  ORDER_UPDATE
+  PAYMENT_STATUS
+  PROMOTION
+  SYSTEM_ALERT
+  NEW_ORDER
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+// ============================================================
+// USER MODEL
+// ============================================================
+
+model User {
+  id       String   @id @default(uuid())
+  email    String   @unique
+  password String?
+  role     UserRole @default(buyer)
+
+  // Shop information (for sellers)
   shopName        String?
   shopDescription String?
   shopPhone       String?
   shopAddress     String?
-  shopStatus      String  @default("PENDING") // "PENDING" | "ACTIVE" | "SUSPENDED"
+  shopStatus      ShopStatus @default(PENDING)
   shopApprovedAt  DateTime?
   shopCreatedAt   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   // Relations
   products          Product[]
-  buyerOrders       Customer_order[]     // đơn hàng buyer tạo
-  sellerOrderItems  Order_item[]         // items trong đơn seller nhận
+  buyerOrders       Customer_order[] @relation("BuyerOrders")
+  sellerOrderItems  Order_item[]
   Wishlist          Wishlist[]
   notifications     Notification[]
-  bulkUploadBatches bulk_upload_batch[]  @relation("UserBatches")
-  reviews          Review[]              @relation("UserReviews")
+  bulkUploadBatches bulk_upload_batch[] @relation("UserBatches")
+  reviews          Review[] @relation("UserReviews")
 
   @@index([role])
   @@index([shopStatus])
+  @@index([email])
 }
 
-// =====================
-// MODEL PRODUCT (đổi merchantId -> sellerId)
-// =====================
+// ============================================================
+// PRODUCT MODEL
+// ============================================================
+
 model Product {
-  id           String   @id @default(uuid())
-  slug         String   @unique
+  id           String       @id @default(uuid())
+  slug         String       @unique
   title        String
   mainImage    String
-  price        Int      @default(0)
-  rating       Int      @default(0)
+  price        Int          @default(0) // Price in cents
+  rating       Int          @default(0)
   description  String
   manufacturer String
-  inStock      Int      @default(1)
-  status       String   @default("DRAFT")  // DRAFT, PUBLISHED, ARCHIVED
+  inStock      Int         @default(0)
+  status       ProductStatus @default(DRAFT)
   categoryId   String
-  sellerId     String   // ← đổi từ merchantId
+  sellerId     String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
+  // Relations
   category        Category          @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   seller          User              @relation(fields: [sellerId], references: [id])
-  orderItems     Order_item[]
-  Wishlist       Wishlist[]
-  reviews        Review[]
+  orderItems      Order_item[]
+  Wishlist        Wishlist[]
+  reviews         Review[]
   subOrderProducts SubOrderProduct[]
   bulkUploadItems bulk_upload_item[] @relation("ProductBulkItems")
 
@@ -76,6 +154,10 @@ model Product {
   @@index([status, inStock])
 }
 
+// ============================================================
+// IMAGE MODEL
+// ============================================================
+
 model Image {
   imageID   String @id @default(uuid())
   productID String
@@ -84,30 +166,35 @@ model Image {
   @@index([productID])
 }
 
-// =====================
-// MODEL ORDER (thêm buyerId)
-// =====================
+// ============================================================
+// CUSTOMER ORDER MODEL
+// ============================================================
+
 model Customer_order {
-  id         String   @id @default(uuid())
-  buyerId    String?  // null nếu checkout không đăng nhập
-
-  name       String
-  lastname   String
-  phone      String
-  email      String
-  company    String?
-  adress     String
-  apartment  String?
-  postalCode String
-  city       String
-  country    String
+  id         String      @id @default(uuid())
+  buyerId    String?
+  
+  // Shipping information
+  name        String
+  lastname    String
+  phone       String
+  email       String
+  company     String?
+  address     String // Fixed: was "adress"
+  apartment   String?
+  postalCode  String
+  city        String
+  country     String
+  
+  // Order details
   orderNotice String?
-  dateTime   DateTime @default(now())
-  status     String   @default("processing") // "processing"|"delivered"|"canceled"
-  total      Int
+  dateTime    DateTime    @default(now())
+  status      OrderStatus @default(processing)
+  total       Int         // Total in cents
 
-  buyer User?        @relation(fields: [buyerId], references: [id])
-  items Order_item[]
+  // Relations
+  buyer    User?         @relation("BuyerOrders", fields: [buyerId], references: [id])
+  items    Order_item[]
   payments Payment[]
   subOrders SubOrder[]
 
@@ -119,11 +206,75 @@ model Customer_order {
   @@index([dateTime, status])
 }
 
-// =====================
-// MODEL MERCHANT (legacy - sellers now use User.shop fields)
-// Kept for backward compatibility with existing routes/controllers
-// Note: New products should use Product.sellerId -> User.id
-// =====================
+// ============================================================
+// ORDER ITEM MODEL
+// ============================================================
+
+model Order_item {
+  id              String @id @default(uuid())
+  orderId         String
+  productId       String
+  sellerId        String
+  quantity        Int
+  priceAtPurchase Int // Price at time of purchase (in cents)
+
+  // Relations
+  order   Customer_order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product        @relation(fields: [productId], references: [id])
+  seller  User           @relation(fields: [sellerId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([sellerId])
+}
+
+// ============================================================
+// PAYMENT MODEL
+// ============================================================
+
+model Payment {
+  id        String          @id @default(uuid())
+  orderId   String
+  customer_order Customer_order @relation(fields: [orderId], references: [id])
+  status    String          @default("PENDING") // PENDING, COMPLETED, FAILED
+  method    String?         // CARD, BANK_TRANSFER, COD
+  amount    Int             @default(0)
+  paidAt    DateTime?
+
+  @@index([orderId])
+  @@index([status])
+}
+
+// ============================================================
+// CATEGORY MODEL
+// ============================================================
+
+model Category {
+  id       String    @id @default(uuid())
+  name     String    @unique
+  products Product[]
+}
+
+// ============================================================
+// WISHLIST MODEL
+// ============================================================
+
+model Wishlist {
+  id        String  @id @default(uuid())
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+
+  @@unique([productId, userId])
+  @@index([userId])
+  @@index([productId])
+}
+
+// ============================================================
+// MERCHANT MODEL (Legacy - for backward compatibility)
+// ============================================================
+
 model Merchant {
   id           String  @id @default(uuid())
   name         String
@@ -131,12 +282,11 @@ model Merchant {
   email        String?
   phone        String?
   address      String?
-  status       String  @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED
+  status       String  @default("ACTIVE")
   shippingFee  Int     @default(0)
   avatar       String?
   banner       String?
 
-  // Relations
   vouchers Voucher[]
 
   createdAt DateTime @default(now())
@@ -145,26 +295,27 @@ model Merchant {
   @@index([status])
 }
 
-// =====================
-// MODEL VOUCHER
-// =====================
+// ============================================================
+// VOUCHER MODEL
+// ============================================================
+
 model Voucher {
   id             String    @id @default(uuid())
   code           String    @unique
   title          String
   description    String?
   discountType   String    // PERCENTAGE, FIXED
-  discountValue  Int        // % (1-100) hoặc số tiền (cents)
+  discountValue  Int       // Percentage (1-100) or amount (cents)
   merchantId     String?
-  merchant       Merchant?  @relation(fields: [merchantId], references: [id])
-  minOrderValue  Int?       // Số tiền tối thiểu (cents)
-  maxDiscount   Int?       // Giảm tối đa (cents)
-  usageLimit    Int?
-  usedCount     Int        @default(0)
-  perUserLimit  Int        @default(1)
-  startsAt      DateTime  @default(now())
-  expiresAt     DateTime
-  isActive      Boolean   @default(true)
+  merchant       Merchant? @relation(fields: [merchantId], references: [id])
+  minOrderValue  Int?
+  maxDiscount    Int?
+  usageLimit     Int?
+  usedCount      Int       @default(0)
+  perUserLimit   Int       @default(1)
+  startsAt       DateTime  @default(now())
+  expiresAt      DateTime
+  isActive       Boolean   @default(true)
 
   usages VoucherUsage[]
 
@@ -174,9 +325,10 @@ model Voucher {
   @@index([expiresAt])
 }
 
-// =====================
-// MODEL VOUCHER_USAGE
-// =====================
+// ============================================================
+// VOUCHER USAGE MODEL
+// ============================================================
+
 model VoucherUsage {
   id        String   @id @default(uuid())
   voucherId String
@@ -189,36 +341,21 @@ model VoucherUsage {
   @@index([userId])
 }
 
-// =====================
-// MODEL PAYMENT
-// =====================
-model Payment {
-  id        String   @id @default(uuid())
-  orderId   String
-  customer_order Customer_order @relation(fields: [orderId], references: [id])
-  status    String   @default("PENDING") // PENDING, COMPLETED, FAILED
-  method    String?  // CARD, BANK_TRANSFER, COD
-  amount    Int      @default(0)
-  paidAt    DateTime?
+// ============================================================
+// REVIEW MODEL
+// ============================================================
 
-  @@index([orderId])
-  @@index([status])
-}
-
-// =====================
-// MODEL REVIEW
-// =====================
 model Review {
-  id        String   @id @default(uuid())
-  rating    Int      // 1-5 stars
-  comment   String?
+  id         String   @id @default(uuid())
+  rating     Int      // 1-5 stars
+  comment    String?
   productId String
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   userId    String
   user      User     @relation("UserReviews", fields: [userId], references: [id])
   merchantId String
   orderId   String?
-  status    String   @default("PUBLISHED") // PUBLISHED, HIDDEN, FLAGGED
+  status    String   @default("PUBLISHED")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -228,16 +365,16 @@ model Review {
   @@index([rating])
 }
 
-// =====================
-// MODEL SUB_ORDER (legacy - for backward compatibility)
-// Note: New orders should use Customer_order + Order_item
-// =====================
+// ============================================================
+// SUBORDER MODELS (Legacy - for backward compatibility)
+// ============================================================
+
 model SubOrder {
   id              String   @id @default(uuid())
   parentOrderId   String
   parentOrder     Customer_order @relation(fields: [parentOrderId], references: [id], onDelete: Cascade)
   merchantId      String
-  status          String   @default("PENDING") // PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED
+  status          String   @default("PENDING")
   subTotal        Int      @default(0)
   shippingTotal   Int      @default(0)
   trackingNumber  String?
@@ -258,10 +395,6 @@ model SubOrder {
   @@index([status])
 }
 
-// =====================
-// MODEL SUB_ORDER_PRODUCT (legacy - for backward compatibility)
-// Note: New orders should use Customer_order + Order_item
-// =====================
 model SubOrderProduct {
   id                    String   @id @default(uuid())
   subOrderId           String
@@ -279,59 +412,9 @@ model SubOrderProduct {
   @@index([productId])
 }
 
-// =====================
-// MODEL ORDER_ITEM (thay thế customer_order_product)
-// Lý do: cần biết item này của seller nào để seller tự xem đơn của mình
-// =====================
-model Order_item {
-  id              String @id @default(uuid())
-  orderId         String
-  productId       String
-  sellerId        String  // ← quan trọng nhất
-  quantity        Int
-  priceAtPurchase Int     // lưu giá tại thời điểm mua, tránh thay đổi giá sau
-
-  order   Customer_order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product        @relation(fields: [productId], references: [id])
-  seller  User           @relation(fields: [sellerId], references: [id])
-
-  @@index([orderId])
-  @@index([productId])
-  @@index([sellerId])
-}
-
-model Category {
-  id       String    @id @default(uuid())
-  name     String    @unique
-  products Product[]
-}
-
-model Wishlist {
-  id        String  @id @default(uuid())
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productId String
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String
-
-  @@unique([productId, userId])
-  @@index([userId])
-  @@index([productId])
-}
-
-enum NotificationType {
-  ORDER_UPDATE
-  PAYMENT_STATUS
-  PROMOTION
-  SYSTEM_ALERT
-  NEW_ORDER       // ← thêm: thông báo cho seller khi có đơn mới
-}
-
-enum NotificationPriority {
-  LOW
-  NORMAL
-  HIGH
-  URGENT
-}
+// ============================================================
+// NOTIFICATION MODEL
+// ============================================================
 
 model Notification {
   id        String               @id @default(uuid())
@@ -352,6 +435,10 @@ model Notification {
   @@index([createdAt])
 }
 
+// ============================================================
+// BULK UPLOAD MODELS
+// ============================================================
+
 model bulk_upload_batch {
   id         String           @id @default(uuid())
   fileName   String?
@@ -362,7 +449,7 @@ model bulk_upload_batch {
   items      bulk_upload_item[]
 
   userId String?
-  user   User?   @relation(name: "UserBatches", fields: [userId], references: [id])
+  user   User?   @relation("UserBatches", fields: [userId], references: [id])
 
   @@index([userId])
   @@index([status])
@@ -392,17 +479,4 @@ model bulk_upload_item {
   @@index([batchId])
   @@index([productId])
   @@index([status])
-}
-
-enum BulkUploadStatus {
-  PENDING
-  COMPLETED
-  PARTIAL
-  FAILED
-}
-
-enum BulkUploadItemStatus {
-  CREATED
-  UPDATED
-  ERROR
 }

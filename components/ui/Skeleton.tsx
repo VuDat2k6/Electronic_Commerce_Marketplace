@@ -1,34 +1,13 @@
-// Enhanced Skeleton Component with shimmer animation
-"use client";
+import { cn } from "./utils";
 
-import React from "react";
-
-interface SkeletonProps {
-  className?: string;
-  variant?: "text" | "circular" | "rectangular" | "rounded";
-  width?: string | number;
-  height?: string | number;
-}
-
-const Skeleton: React.FC<SkeletonProps> = ({
-  className = "",
-  variant = "rounded",
-  width,
-  height,
-}) => {
-  const variantClasses = {
-    text: "rounded",
-    circular: "rounded-full",
-    rectangular: "rounded-none",
-    rounded: "rounded-lg",
-  };
-
+function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={`shimmer ${variantClasses[variant]} ${className}`}
-      style={{ width, height }}
+      data-slot="skeleton"
+      className={cn("bg-accent animate-pulse rounded-md", className)}
+      {...props}
     />
   );
-};
+}
 
-export default Skeleton;
+export { Skeleton };
