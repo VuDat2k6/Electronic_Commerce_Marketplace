@@ -1,134 +1,173 @@
+// HeroSlider - Exactly matching the zip file design (fixed for Next.js)
 "use client";
 
-import { memo, useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowRight, Sparkles } from 'lucide-react';
+import { motion } from 'framer-motion';
+import Image from 'next/image';
+import Link from 'next/link';
 
-const slides = [
-  {
-    id: 1,
-    title: 'Summer Sale 2026',
-    subtitle: 'Up to 50% OFF on Selected Items',
-    cta: 'Shop Now',
-    gradient: 'from-purple-600 to-blue-600',
-  },
-  {
-    id: 2,
-    title: 'New Arrivals',
-    subtitle: 'Discover the Latest Trends',
-    cta: 'Explore',
-    gradient: 'from-pink-600 to-purple-600',
-  },
-  {
-    id: 3,
-    title: 'Tech Gadgets',
-    subtitle: 'Latest Technology at Best Prices',
-    cta: 'View Collection',
-    gradient: 'from-cyan-600 to-blue-600',
-  },
-];
+// Generate random particles once on mount to avoid hydration mismatch
+const particles = Array.from({ length: 20 }, (_, i) => ({
+  id: i,
+  left: Math.random() * 100,
+  top: Math.random() * 100,
+  duration: 3 + Math.random() * 2,
+  delay: Math.random() * 2,
+}));
 
-export const HeroSlider = memo(() => {
-  const [currentSlide, setCurrentSlide] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 5000);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  const goToSlide = (index: number) => {
-    setCurrentSlide(index);
-  };
-
-  const goToPrevious = () => {
-    setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
-  };
-
-  const goToNext = () => {
-    setCurrentSlide((prev) => (prev + 1) % slides.length);
-  };
-
+export function HeroSlider() {
   return (
-    <div className="relative w-full h-[400px] md:h-[500px] overflow-hidden bg-gradient-to-br from-muted to-background">
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={currentSlide}
-          initial={{ opacity: 0, x: 100 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -100 }}
-          transition={{ duration: 0.5, ease: 'easeInOut' }}
-          className={`absolute inset-0 bg-gradient-to-br ${slides[currentSlide].gradient}`}
-        >
-          <div className="container mx-auto px-4 h-full flex items-center justify-center">
-            <div className="text-center text-white max-w-3xl">
-              <motion.h1
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2, duration: 0.5 }}
-                className="text-4xl md:text-6xl font-bold mb-4"
-              >
-                {slides[currentSlide].title}
-              </motion.h1>
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3, duration: 0.5 }}
-                className="text-xl md:text-2xl mb-8 text-white/90"
-              >
-                {slides[currentSlide].subtitle}
-              </motion.p>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4, duration: 0.5 }}
-              >
-                <Button size="lg" variant="secondary" className="font-semibold text-primary">
-                  {slides[currentSlide].cta}
-                </Button>
-              </motion.div>
-            </div>
-          </div>
-        </motion.div>
-      </AnimatePresence>
-
-      {/* Navigation Arrows */}
-      <Button
-        variant="secondary"
-        size="icon"
-        className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full shadow-lg opacity-80 hover:opacity-100"
-        onClick={goToPrevious}
-      >
-        <ChevronLeft className="h-6 w-6" />
-      </Button>
-      <Button
-        variant="secondary"
-        size="icon"
-        className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full shadow-lg opacity-80 hover:opacity-100"
-        onClick={goToNext}
-      >
-        <ChevronRight className="h-6 w-6" />
-      </Button>
-
-      {/* Dots Indicator */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-        {slides.map((_, index) => (
-          <button
-            key={index}
-            onClick={() => goToSlide(index)}
-            className={`w-2 h-2 rounded-full transition-all ${
-              index === currentSlide ? 'bg-white w-8' : 'bg-white/50'
-            }`}
-            aria-label={`Go to slide ${index + 1}`}
+    <section className="bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 py-20 overflow-hidden relative">
+      {/* Animated background particles */}
+      <div className="absolute inset-0 overflow-hidden">
+        {particles.map((particle) => (
+          <motion.div
+            key={particle.id}
+            className="absolute w-2 h-2 bg-white rounded-full"
+            style={{
+              left: `${particle.left}%`,
+              top: `${particle.top}%`,
+            }}
+            animate={{
+              y: [0, -30, 0],
+              opacity: [0.2, 0.8, 0.2],
+              scale: [1, 1.5, 1],
+            }}
+            transition={{
+              duration: particle.duration,
+              repeat: Infinity,
+              delay: particle.delay,
+            }}
           />
         ))}
       </div>
-    </div>
-  );
-});
 
-HeroSlider.displayName = 'HeroSlider';
+      <div className="max-w-7xl mx-auto px-4 relative z-10">
+        <div className="grid md:grid-cols-2 gap-12 items-center">
+          {/* Left content */}
+          <motion.div
+            className="text-white"
+            initial={{ opacity: 0, x: -50 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8 }}
+          >
+            <motion.div
+              className="inline-block mb-6"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
+            >
+              <div className="flex items-center gap-2 bg-white/20 backdrop-blur-md px-6 py-3 rounded-full border border-white/30">
+                <Sparkles className="w-5 h-5" />
+                <span className="font-semibold">POWERED BY NEXT.JS</span>
+              </div>
+            </motion.div>
+
+            <motion.h2
+              className="text-4xl md:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              Smart Home<br />
+              <span className="bg-gradient-to-r from-yellow-200 to-orange-200 bg-clip-text text-transparent">
+                Electronics
+              </span>
+            </motion.h2>
+
+            <motion.p
+              className="text-lg md:text-xl mb-8 text-white/90 max-w-lg leading-relaxed"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              Transform your home with cutting-edge technology.
+              Energy-efficient, connected devices for modern living.
+            </motion.p>
+
+            <motion.div
+              className="flex gap-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+            >
+              <Link href="/shop/smart-phones">
+                <motion.button
+                  whileHover={{ scale: 1.05, boxShadow: "0 10px 40px rgba(0,0,0,0.3)" }}
+                  whileTap={{ scale: 0.95 }}
+                  className="bg-white text-purple-600 px-8 py-4 rounded-full font-bold transition-all flex items-center gap-3 shadow-2xl"
+                >
+                  <motion.span
+                    className="bg-purple-100 px-3 py-1 rounded-full text-sm"
+                    animate={{ rotate: [0, 5, -5, 0] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  >
+                    Home
+                  </motion.span>
+                  Explore Now
+                  <motion.div
+                    animate={{ x: [0, 5, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    <ArrowRight className="w-5 h-5" />
+                  </motion.div>
+                </motion.button>
+              </Link>
+            </motion.div>
+          </motion.div>
+
+          {/* Right content - Product showcase */}
+          <motion.div
+            className="relative"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.5, duration: 0.8 }}
+          >
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent backdrop-blur-sm rounded-3xl transform rotate-6"
+              animate={{ rotate: [6, 8, 6] }}
+              transition={{ duration: 4, repeat: Infinity }}
+            />
+            <motion.div
+              className="relative bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20 shadow-2xl"
+              whileHover={{ scale: 1.02 }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
+              <motion.div
+                className="aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl"
+                whileHover={{ scale: 1.05 }}
+                transition={{ type: "spring", stiffness: 200 }}
+              >
+                <Image
+                  src="https://picsum.photos/seed/smarthome/800/600"
+                  alt="Smart Home Device"
+                  width={800}
+                  height={600}
+                  className="w-full h-full object-cover"
+                />
+              </motion.div>
+
+              {/* Floating badges */}
+              <motion.div
+                className="absolute -top-4 -right-4 bg-yellow-400 text-gray-900 px-6 py-3 rounded-full font-bold shadow-xl"
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                NEW
+              </motion.div>
+              <motion.div
+                className="absolute -bottom-4 -left-4 bg-red-500 text-white px-6 py-3 rounded-full font-bold shadow-xl"
+                animate={{ y: [0, 10, 0] }}
+                transition={{ duration: 2.5, repeat: Infinity }}
+              >
+                -30%
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default HeroSlider;

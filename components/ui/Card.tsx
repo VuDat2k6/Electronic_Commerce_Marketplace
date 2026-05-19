@@ -1,92 +1,80 @@
-import * as React from "react";
+"use client";
 
-import { cn } from "./utils";
+interface CardProps {
+  children: React.ReactNode;
+  className?: string;
+  hover?: boolean;
+  padding?: "none" | "sm" | "md" | "lg";
+}
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * Renders a styled card container for grouping content.
+ *
+ * @param children - Content to render inside the card
+ * @param className - Additional CSS classes appended to the card container
+ * @param hover - If `true`, enables hover styles (shadow, border, transition, and pointer)
+ * @param padding - Controls internal padding; one of `"none"`, `"sm"`, `"md"`, or `"lg"`
+ * @returns The rendered card element with applied border, background, rounding, optional hover styles, and the selected padding
+ */
+export function Card({ children, className = "", hover = false, padding = "md" }: CardProps) {
+  const paddingStyles = {
+    none: "",
+    sm: "p-4",
+    md: "p-6",
+    lg: "p-8",
+  };
+
   return (
     <div
-      data-slot="card"
-      className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border",
-        className,
-      )}
-      {...props}
-    />
+      className={`
+        bg-white rounded-2xl border border-zinc-200/60 shadow-sm
+        ${hover ? "hover:shadow-lg hover:border-zinc-300/80 transition-all duration-300 cursor-pointer" : ""}
+        ${paddingStyles[padding]}
+        ${className}
+      `}
+    >
+      {children}
+    </div>
   );
 }
 
-function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * Renders a card header container with horizontal padding, vertical padding, and a bottom border.
+ *
+ * @param children - Content to render inside the header
+ * @param className - Additional CSS classes appended to the header container
+ * @returns A div element styled as a card header that wraps `children`
+ */
+export function CardHeader({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div
-      data-slot="card-header"
-      className={cn(
-        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 pt-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
-        className,
-      )}
-      {...props}
-    />
+    <div className={`px-6 py-4 border-b border-zinc-100 ${className}`}>
+      {children}
+    </div>
   );
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * Renders a card body section with default padding and optional extra classes.
+ *
+ * @param children - Content to display inside the card body.
+ * @param className - Additional CSS classes to append to the container.
+ * @returns The card body element with padding applied.
+ */
+export function CardBody({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <div className={`p-6 ${className}`}>{children}</div>;
+}
+
+/**
+ * Renders a styled footer section for a Card component.
+ *
+ * @param children - Content to display inside the footer
+ * @param className - Additional CSS classes appended to the footer container
+ * @returns The footer element containing `children`, with top border and muted background styling
+ */
+export function CardFooter({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <h4
-      data-slot="card-title"
-      className={cn("leading-none", className)}
-      {...props}
-    />
+    <div className={`px-6 py-4 border-t border-zinc-100 bg-zinc-50/50 ${className}`}>
+      {children}
+    </div>
   );
 }
-
-function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <p
-      data-slot="card-description"
-      className={cn("text-muted-foreground", className)}
-      {...props}
-    />
-  );
-}
-
-function CardAction({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-action"
-      className={cn(
-        "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
-function CardContent({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-content"
-      className={cn("px-6 [&:last-child]:pb-6", className)}
-      {...props}
-    />
-  );
-}
-
-function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-footer"
-      className={cn("flex items-center px-6 pb-6 [.border-t]:pt-6", className)}
-      {...props}
-    />
-  );
-}
-
-export {
-  Card,
-  CardHeader,
-  CardFooter,
-  CardTitle,
-  CardAction,
-  CardDescription,
-  CardContent,
-};
