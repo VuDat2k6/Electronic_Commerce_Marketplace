@@ -27,6 +27,7 @@ export interface CreateCustomerOrderInput {
   customerId?: string; // Logged-in user ID
   items: CheckoutPayloadItem[];
   voucherCodes?: string[]; // List of voucher codes
+  paymentMethod?: "COD" | "BANK_TRANSFER" | "CARD";
 }
 
 export interface CreateCustomerOrderResult {
@@ -50,6 +51,14 @@ export interface SubOrderSummary {
   productCount: number;
 }
 
+type SellerOrderGroup = {
+  items: { productId: string; quantity: number; unitPrice: number }[];
+  subTotal: number;
+  shippingTotal: number;
+  sellerId: string;
+  sellerEmail: string;
+};
+
 export interface ListCustomerOrdersResult {
   orders: unknown[];
 }
@@ -70,26 +79,95 @@ export interface GetMerchantShopResult {
 /**
  * Derive parent order status from sub-order statuses
  */
-function deriveParentOrderStatus(subOrderStatuses: string[]): string {
-  if (subOrderStatuses.length === 0) return "PENDING";
+function deriveParentOrderStatus(subOrderStatuses: string[]): "processing" | "delivered" | "canceled" {
+  if (subOrderStatuses.length === 0) return "processing";
   
   const allDelivered = subOrderStatuses.every((s) => s === "DELIVERED");
-  if (allDelivered) return "COMPLETED";
+  if (allDelivered) return "delivered";
   
   const allCancelled = subOrderStatuses.every((s) => s === "CANCELLED");
-  if (allCancelled) return "CANCELLED";
-  
-  const anyShipped = subOrderStatuses.some((s) => ["SHIPPED", "DELIVERED"].includes(s));
-  const anyPending = subOrderStatuses.some((s) => ["PENDING", "CONFIRMED", "PROCESSING"].includes(s));
-  if (anyShipped && anyPending) return "PARTIALLY_FULFILLED";
-  
-  const anyCancelled = subOrderStatuses.some((s) => s === "CANCELLED");
-  if (anyCancelled) return "PARTIALLY_CANCELLED";
-  
-  const anyConfirmed = subOrderStatuses.some((s) => s !== "PENDING");
-  if (anyConfirmed) return "PROCESSING";
-  
-  return "PAID";
+  if (allCancelled) return "canceled";
+
+  return "processing";
+}
+
+function getBuyerDisplayName(input: CreateCustomerOrderInput) {
+  const fullName = [input.name, input.lastname].filter(Boolean).join(" ").trim();
+  return fullName || input.email || "A customer";
+}
+
+async function createSellerNewOrderNotifications(
+  orderId: string,
+  buyerName: string,
+  subOrders: SubOrderSummary[]
+) {
+  if (subOrders.length === 0) return;
+
+  const notifications = subOrders.map((subOrder) => {
+    const productLabel = subOrder.productCount === 1 ? "item" : "items";
+
+    return {
+      userId: subOrder.merchantId,
+      title: "New order received",
+      message: `${buyerName} placed order #${orderId} with ${subOrder.productCount} ${productLabel}.`,
+      type: "NEW_ORDER" as const,
+      priority: "HIGH" as const,
+      isRead: false,
+      metadata: {
+        orderId,
+        subOrderId: subOrder.id,
+        productCount: subOrder.productCount,
+        subTotal: subOrder.subTotal,
+        shippingTotal: subOrder.shippingTotal,
+      },
+    };
+  });
+
+  try {
+    await prisma.notification.createMany({ data: notifications });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown notification error";
+    console.warn(`Failed to create seller new-order notifications for order ${orderId}: ${message}`);
+  }
+}
+
+async function createBuyerOrderNotification(
+  orderId: string,
+  input: CreateCustomerOrderInput,
+  totals: {
+    total: number;
+    subTotal: number;
+    shippingTotal: number;
+    discountTotal: number;
+    subOrderCount: number;
+  }
+) {
+  if (!input.customerId) return;
+
+  try {
+    await prisma.notification.create({
+      data: {
+        userId: input.customerId,
+        title: "Order confirmed",
+        message: `Your order #${orderId} has been placed successfully and is waiting for seller confirmation.`,
+        type: "ORDER_UPDATE",
+        priority: "NORMAL",
+        isRead: false,
+        metadata: {
+          orderId,
+          total: totals.total,
+          subTotal: totals.subTotal,
+          shippingTotal: totals.shippingTotal,
+          discountTotal: totals.discountTotal,
+          subOrderCount: totals.subOrderCount,
+          paymentMethod: input.paymentMethod || "COD",
+        },
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown notification error";
+    console.warn(`Failed to create buyer order notification for order ${orderId}: ${message}`);
+  }
 }
 
 // ============================================
@@ -181,6 +259,7 @@ export async function createCustomerOrder(
         select: {
           id: true,
           email: true,
+          shopStatus: true,
         },
       },
     },
@@ -199,19 +278,21 @@ export async function createCustomerOrder(
   // ============================================
   const sellerGroups = new Map<
     string,
-    {
-      items: { productId: string; quantity: number; unitPrice: number }[];
-      subTotal: number;
-      shippingTotal: number;
-      sellerId: string;
-      sellerEmail: string;
-    }
+    SellerOrderGroup
   >();
 
   for (const item of mergedItems) {
     const dbProduct = productMap.get(item.productId)!;
 
     // Business validation
+    if (dbProduct.status !== "PUBLISHED") {
+      throw new Error(`"${dbProduct.title}" is no longer available for purchase. Please remove it from your cart.`);
+    }
+
+    if (dbProduct.seller?.shopStatus !== "ACTIVE") {
+      throw new Error(`Seller shop for "${dbProduct.title}" is not active. Please remove it from your cart.`);
+    }
+
     if (dbProduct.inStock < item.quantity) {
       throw new Error(`Insufficient stock for "${dbProduct.title}": only ${dbProduct.inStock} left`);
     }
@@ -222,7 +303,7 @@ export async function createCustomerOrder(
     }
 
     // Group by seller (use sellerId from product)
-    const sellerId = item.merchantId || dbProduct.sellerId;
+    const sellerId = item.sellerId || dbProduct.sellerId;
     if (!sellerGroups.has(sellerId)) {
       sellerGroups.set(sellerId, {
         items: [],
@@ -264,7 +345,14 @@ export async function createCustomerOrder(
     appliedVouchers.push(...voucherResults.applied);
   }
 
-  const finalTotal = Math.max(0, grandTotal - discountTotal);
+  const shippingTotal = grandTotal > 0 ? 50000 : 0;
+  const taxTotal = Math.round(grandTotal * 0.05);
+  const finalTotal = Math.max(0, grandTotal - discountTotal + shippingTotal + taxTotal);
+  const paymentMethod = input.paymentMethod || "COD";
+
+  if (!["COD", "BANK_TRANSFER", "CARD"].includes(paymentMethod)) {
+    throw new Error("Invalid payment method");
+  }
 
   // ============================================
   // Step 5: Create order + sub-orders + snapshots in transaction
@@ -273,18 +361,29 @@ export async function createCustomerOrder(
     // 5.1 Create parent order
     const order = await tx.customer_order.create({
       data: {
+        buyerId: input.customerId || null,
         name: input.name || "Customer",
         lastname: input.lastname || "Order",
         phone: input.phone || "N/A",
         email: input.email || input.customerId || "",
         company: input.company || "",
-        adress: input.adress || "",
+        address: input.address || "",
         apartment: input.apartment || "",
         postalCode: input.postalCode || "",
         city: input.city || "",
         country: input.country || "",
-        status: "PAID",
+        orderNotice: input.orderNotice || "",
+        status: "processing",
         total: finalTotal,
+      },
+    });
+
+    await tx.payment.create({
+      data: {
+        orderId: order.id,
+        method: paymentMethod,
+        status: "PENDING",
+        amount: finalTotal,
       },
     });
 
@@ -324,6 +423,8 @@ export async function createCustomerOrder(
         const stockUpdateResult = await tx.product.updateMany({
           where: {
             id: item.productId,
+            status: "PUBLISHED",
+            seller: { is: { shopStatus: "ACTIVE" } },
             inStock: { gte: item.quantity },
           },
           data: {
@@ -332,18 +433,18 @@ export async function createCustomerOrder(
         });
 
         if (stockUpdateResult.count !== 1) {
-          throw new Error(`Insufficient stock for "${dbProduct.title}" during checkout`);
+          throw new Error(`"${dbProduct.title}" is no longer available in the requested quantity. Please refresh your cart.`);
         }
       }
 
       createdSubOrders.push({
         id: subOrder.id,
         merchantId: group.sellerId,
-        merchantName: dbProduct?.seller?.email || "Unknown Seller",
+        merchantName: group.sellerEmail || "Unknown Seller",
         status: subOrder.status,
         subTotal: group.subTotal,
         shippingTotal: group.shippingTotal,
-        productCount: group.items.length,
+        productCount: group.items.reduce((sum, item) => sum + item.quantity, 0),
       });
     }
 
@@ -370,15 +471,30 @@ export async function createCustomerOrder(
     return { ...order, subOrders: createdSubOrders };
   });
 
+  await Promise.all([
+    createBuyerOrderNotification(createdOrder.id, input, {
+      total: finalTotal,
+      subTotal: totalSubTotal,
+      shippingTotal,
+      discountTotal,
+      subOrderCount: sellerGroups.size,
+    }),
+    createSellerNewOrderNotifications(
+      createdOrder.id,
+      getBuyerDisplayName(input),
+      createdOrder.subOrders || []
+    ),
+  ]);
+
   return {
     orderId: createdOrder.id,
     total: finalTotal,
     subTotal: totalSubTotal,
-    shippingTotal: 0,
+    shippingTotal,
     discountTotal,
     subOrderCount: sellerGroups.size,
     message: "Order created successfully",
-    subOrders: (createdOrder as any).subOrders || [],
+    subOrders: createdOrder.subOrders || [],
   };
 }
 
@@ -388,53 +504,74 @@ export async function createCustomerOrder(
  * @param voucherCodes - Array of voucher codes to evaluate (case-insensitive)
  * @param userId - Identifier of the user attempting to apply the vouchers; used for per-user limits
  * @param orderTotal - Order total used to evaluate minimum-order and percentage-based discounts
- * @param _sellerGroups - Unused placeholder for seller grouping context
+ * @param sellerGroups - Seller grouping context used to scope seller vouchers
  * @returns An object containing `totalDiscount` (sum of all applied discounts) and `applied` (array of `{ code, discount }` for each applied voucher)
  */
 async function applyVouchers(
   voucherCodes: string[],
   userId: string,
   orderTotal: number,
-  _sellerGroups: Map<string, unknown>
+  sellerGroups: Map<string, SellerOrderGroup>
 ): Promise<{ totalDiscount: number; applied: { code: string; discount: number }[] }> {
   let totalDiscount = 0;
   const applied: { code: string; discount: number }[] = [];
+  const normalizedCodes = [...new Set(voucherCodes.map((code) => String(code).trim().toUpperCase()).filter(Boolean))];
 
-  for (const code of voucherCodes) {
+  for (const code of normalizedCodes) {
     const voucher = await prisma.voucher.findUnique({
-      where: { code: code.toUpperCase() },
+      where: { code },
+      include: { merchant: { select: { name: true } } },
     });
 
-    if (!voucher) continue;
-    if (!voucher.isActive) continue;
-    if (new Date() > voucher.expiresAt) continue;
-    if (voucher.usageLimit && voucher.usedCount >= voucher.usageLimit) continue;
+    if (!voucher) throw new Error(`Voucher ${code} was not found`);
+    if (!voucher.isActive) throw new Error(`Voucher ${code} is no longer active`);
+    if (voucher.startsAt && new Date() < voucher.startsAt) throw new Error(`Voucher ${code} is not active yet`);
+    if (new Date() > voucher.expiresAt) throw new Error(`Voucher ${code} has expired`);
+    if (voucher.usageLimit && voucher.usedCount >= voucher.usageLimit) {
+      throw new Error(`Voucher ${code} has reached its usage limit`);
+    }
 
     // Check per-user usage limit
     if (userId) {
       const userUsageCount = await prisma.voucherUsage.count({
         where: { voucherId: voucher.id, userId },
       });
-      if (userUsageCount >= voucher.perUserLimit) continue;
+      if (userUsageCount >= voucher.perUserLimit) {
+        throw new Error(`Voucher ${code} has already been used by this account`);
+      }
+    }
+
+    const eligibleTotal = voucher.merchantId
+      ? sellerGroups.get(voucher.merchantId)?.subTotal || 0
+      : orderTotal;
+
+    if (voucher.merchantId && eligibleTotal <= 0) {
+      throw new Error(`Voucher ${code} only applies to products from ${voucher.merchant?.name || "the seller"}`);
     }
 
     // Check minimum order amount
-    if (voucher.minOrderValue && orderTotal < voucher.minOrderValue) continue;
+    if (voucher.minOrderValue && eligibleTotal < voucher.minOrderValue) {
+      throw new Error(`Voucher ${code} requires a minimum eligible subtotal of ${voucher.minOrderValue.toLocaleString("vi-VN")} VND`);
+    }
 
     // Calculate discount
     let discount = 0;
     if (voucher.discountType === "FIXED") {
       discount = voucher.discountValue;
     } else if (voucher.discountType === "PERCENTAGE") {
-      discount = Math.floor(orderTotal * (voucher.discountValue / 100));
+      discount = Math.floor(eligibleTotal * (voucher.discountValue / 100));
       if (voucher.maxDiscount) {
         discount = Math.min(discount, voucher.maxDiscount);
       }
     }
 
+    discount = Math.min(discount, eligibleTotal);
+
     if (discount > 0) {
       totalDiscount += discount;
       applied.push({ code, discount });
+    } else {
+      throw new Error(`Voucher ${code} does not apply to this order`);
     }
   }
 
@@ -444,10 +581,10 @@ async function applyVouchers(
 // ============================================
 // Query functions
 /**
- * Fetches orders for the given customer email, including each order's items and payments.
+ * Fetches orders for an authenticated buyer, including seller-split products and payments.
  *
- * @param customerId - The customer's email used to look up orders
- * @returns An object with an `orders` array; each order includes `items` (with `product` id/slug/mainImage and `seller` id/email) and `payments`
+ * @param customerId - The authenticated buyer user ID used to look up orders
+ * @returns An object with an `orders` array; each order includes `subOrders.products` and `payments`
  * @throws If `customerId` is falsy
  */
 
@@ -457,13 +594,17 @@ export async function listCustomerOrders(customerId: string): Promise<ListCustom
   }
 
   const orders = await prisma.customer_order.findMany({
-    where: { email: customerId },
+    where: { buyerId: customerId },
     orderBy: { dateTime: "desc" },
     include: {
-      items: {
+      subOrders: {
+        orderBy: { createdAt: "desc" },
         include: {
-          product: { select: { id: true, slug: true, mainImage: true } },
-          seller: { select: { id: true, email: true } },
+          products: {
+            include: {
+              product: { select: { id: true, slug: true, mainImage: true } },
+            },
+          },
         },
       },
       payments: true,
@@ -489,7 +630,7 @@ export async function listSellerSubOrders(merchantId: string): Promise<ListSelle
           lastname: true,
           email: true,
           phone: true,
-          adress: true,
+          address: true,
           city: true,
           country: true,
           dateTime: true,
@@ -515,13 +656,27 @@ export async function getMerchantShop(merchantId: string): Promise<GetMerchantSh
     throw new Error("merchantId is required");
   }
 
-  const merchant = await prisma.merchant.findUnique({
+  const seller = await prisma.user.findUnique({
     where: { id: merchantId },
     select: {
       id: true,
-      name: true,
-      description: true,
-      status: true,
+      email: true,
+      role: true,
+      shopName: true,
+      shopDescription: true,
+      shopPhone: true,
+      shopAddress: true,
+      shopStatus: true,
+    },
+  });
+
+  if (!seller || seller.role !== "seller" || seller.shopStatus !== "ACTIVE") {
+    throw new Error("Shop is not active");
+  }
+
+  const legacyMerchant = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+    select: {
       email: true,
       phone: true,
       address: true,
@@ -531,12 +686,21 @@ export async function getMerchantShop(merchantId: string): Promise<GetMerchantSh
     },
   });
 
-  if (!merchant) {
-    throw new Error("Merchant not found");
-  }
+  const merchant = {
+    id: seller.id,
+    name: seller.shopName || legacyMerchant?.email || seller.email,
+    description: seller.shopDescription || null,
+    status: seller.shopStatus,
+    email: seller.email || legacyMerchant?.email || null,
+    phone: seller.shopPhone || legacyMerchant?.phone || null,
+    address: seller.shopAddress || legacyMerchant?.address || null,
+    shippingFee: legacyMerchant?.shippingFee || 0,
+    avatar: legacyMerchant?.avatar || null,
+    banner: legacyMerchant?.banner || null,
+  };
 
   const products = await prisma.product.findMany({
-    where: { merchantId },
+    where: { sellerId: merchantId, status: "PUBLISHED" },
     orderBy: { title: "asc" },
     select: {
       id: true,
@@ -572,7 +736,14 @@ export async function updateSubOrderStatus(
     throw new Error(`Invalid status. Must be one of: ${validStatuses.join(", ")}`);
   }
 
-  const updateData: Record<string, unknown> = { status: newStatus };
+  const updateData: {
+    status: string;
+    shippedAt?: Date;
+    trackingNumber?: string;
+    shippingProvider?: string;
+    deliveredAt?: Date;
+    cancelledAt?: Date;
+  } = { status: newStatus };
 
   if (newStatus === "SHIPPED") {
     updateData.shippedAt = new Date();

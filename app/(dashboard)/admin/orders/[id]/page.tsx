@@ -31,7 +31,7 @@ const AdminSingleOrder = () => {
   const [orderProducts, setOrderProducts] = useState<OrderProduct[]>();
   const [order, setOrder] = useState<Order>({
     id: "",
-    adress: "",
+    address: "",
     apartment: "",
     company: "",
     dateTime: "",
@@ -97,7 +97,7 @@ const AdminSingleOrder = () => {
       order?.lastname.length > 0 &&
       order?.phone.length > 0 &&
       order?.email.length > 0 &&
-      order?.adress.length > 0 &&
+      order?.address.length > 0 &&
       order?.city.length > 0 &&
       order?.country.length > 0 &&
       order?.postalCode.length > 0
@@ -231,7 +231,7 @@ const AdminSingleOrder = () => {
         <div>
           <label className="form-control w-full max-w-xs">
             <div className="label">
-              <span className="label-text">Email adress:</span>
+              <span className="label-text">Email address:</span>
             </div>
             <input
               type="email"
@@ -265,8 +265,8 @@ const AdminSingleOrder = () => {
               <input
                 type="text"
                 className="input input-bordered w-full max-w-xs"
-                value={order?.adress}
-                onChange={(e) => setOrder({ ...order, adress: e.target.value })}
+                value={order?.address}
+                onChange={(e) => setOrder({ ...order, address: e.target.value })}
               />
             </label>
           </div>

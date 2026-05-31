@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 export default withAuth(
   function middleware(req) {
     const role = req.nextauth.token?.role;
+    const shopStatus = req.nextauth.token?.shopStatus;
     const path = req.nextUrl.pathname;
 
     // Admin routes — chỉ admin
@@ -25,8 +26,8 @@ export default withAuth(
       path.startsWith("/seller/settings") ||
       path.startsWith("/seller/bulk-upload")
     ) {
-      if (role !== "seller") {
-        return NextResponse.redirect(new URL("/become-seller", req.url));
+      if (role !== "seller" || shopStatus !== "ACTIVE") {
+        return NextResponse.redirect(new URL("/seller/status", req.url));
       }
     }
 
@@ -52,7 +53,8 @@ export default withAuth(
           path.startsWith("/seller/products") ||
           path.startsWith("/seller/orders") ||
           path.startsWith("/seller/vouchers") ||
-          path.startsWith("/seller/settings")
+          path.startsWith("/seller/settings") ||
+          path.startsWith("/seller/bulk-upload")
         ) {
           return !!token;
         }

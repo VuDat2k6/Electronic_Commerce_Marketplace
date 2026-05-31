@@ -6,10 +6,68 @@ import { useRouter } from "next/navigation";
 import apiClient from "@/lib/api";
 import toast from "react-hot-toast";
 import { motion } from "framer-motion";
-import { Store, CheckCircle2 } from "lucide-react";
+import { Store, CheckCircle2, Clock3, Home, ShieldAlert } from "lucide-react";
+
+type AccountStatus = {
+  id: string;
+  email: string | null;
+  role: string;
+  shopStatus: string | null;
+  shopName: string | null;
+};
+
+function SellerStatusNotice({
+  status,
+  shopName,
+  title,
+  message,
+}: {
+  status: string | null;
+  shopName?: string | null;
+  title?: string;
+  message?: string;
+}) {
+  const isSuspended = status === "SUSPENDED";
+  const Icon = isSuspended ? ShieldAlert : Clock3;
+  const fallbackTitle = isSuspended ? "Shop suspended" : "Shop awaiting approval";
+  const fallbackMessage = isSuspended
+    ? `Your shop${shopName ? ` "${shopName}"` : ""} is temporarily disabled. Seller tools, product listings, vouchers, bulk upload, and checkout for this shop are blocked until an admin reactivates it.`
+    : `Your shop${shopName ? ` "${shopName}"` : ""} is waiting for admin approval. Seller tools will unlock after the shop is approved.`;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 px-4 py-12">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mx-auto max-w-xl rounded-2xl bg-white p-8 text-center shadow-2xl"
+      >
+        <div className={`mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl ${isSuspended ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"}`}>
+          <Icon className="h-8 w-8" />
+        </div>
+        <p className="text-sm font-semibold uppercase tracking-wide text-gray-400">
+          Seller account
+        </p>
+        <h1 className="mt-2 text-2xl font-bold text-gray-950">
+          {title || fallbackTitle}
+        </h1>
+        <p className="mt-3 text-gray-600">
+          {message || fallbackMessage}
+        </p>
+        <button
+          type="button"
+          onClick={() => window.location.assign("/")}
+          className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:from-purple-700 hover:to-pink-600"
+        >
+          <Home className="h-4 w-4" />
+          Back to store
+        </button>
+      </motion.div>
+    </div>
+  );
+}
 
 export default function BecomeSellerPage() {
-  const { data: session } = useSession();
+  const { data: session, status, update } = useSession();
   const router = useRouter();
   const [form, setForm] = useState({
     shopName: "",
@@ -18,15 +76,103 @@ export default function BecomeSellerPage() {
     shopAddress: "",
   });
   const [loading, setLoading] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(true);
+  const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null);
+  const [statusError, setStatusError] = useState(false);
+
+  const sessionUser = session?.user as any;
 
   useEffect(() => {
-    if (session?.user?.role === "seller") {
+    let cancelled = false;
+
+    const fetchAccountStatus = async () => {
+      if (status === "loading") return;
+      if (status === "unauthenticated") {
+        setStatusLoading(false);
+        return;
+      }
+
+      setStatusLoading(true);
+      setStatusError(false);
+
+      try {
+        const res = await fetch("/api/account/status", { cache: "no-store" });
+        if (!res.ok) throw new Error("Unable to verify account status");
+
+        const data = await res.json();
+        const currentUser = data?.user as AccountStatus | undefined;
+        if (!currentUser || cancelled) return;
+
+        setAccountStatus(currentUser);
+        if (
+          currentUser.role !== sessionUser?.role ||
+          currentUser.shopStatus !== sessionUser?.shopStatus
+        ) {
+          await update({
+            role: currentUser.role,
+            shopStatus: currentUser.shopStatus,
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setStatusError(true);
+        }
+      } finally {
+        if (!cancelled) {
+          setStatusLoading(false);
+        }
+      }
+    };
+
+    fetchAccountStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionUser?.role, sessionUser?.shopStatus, status, update]);
+
+  useEffect(() => {
+    if (statusLoading || statusError) return;
+    if (accountStatus?.role === "seller" && accountStatus.shopStatus === "ACTIVE") {
       router.replace("/seller/dashboard");
     }
-  }, [session?.user?.role, router]);
+    if (accountStatus?.role === "seller" && accountStatus.shopStatus !== "ACTIVE") {
+      router.replace("/seller/status");
+    }
+  }, [accountStatus?.role, accountStatus?.shopStatus, router, statusError, statusLoading]);
 
-  if (session?.user?.role === "seller") {
-    return null;
+  if (statusLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-white/40 border-t-white" />
+      </div>
+    );
+  }
+
+  if (statusError && sessionUser?.role === "seller") {
+    return (
+      <SellerStatusNotice
+        status="PENDING"
+        title="Unable to verify seller status"
+        message="We could not confirm your current shop status. Please refresh the page before using seller tools."
+      />
+    );
+  }
+
+  if (accountStatus?.role === "seller" && accountStatus.shopStatus === "ACTIVE") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-white/40 border-t-white" />
+      </div>
+    );
+  }
+
+  if (accountStatus?.role === "seller" && accountStatus.shopStatus !== "ACTIVE") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-white/40 border-t-white" />
+      </div>
+    );
   }
 
   const handleSubmit = async () => {
@@ -34,7 +180,7 @@ export default function BecomeSellerPage() {
       toast.error("Shop name is required");
       return;
     }
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
       toast.error("Please log in first");
       return;
     }
@@ -43,11 +189,12 @@ export default function BecomeSellerPage() {
 
     try {
       const res = await apiClient.post("/api/seller/register", {
-        userId: session.user.id,
+        userId: (session?.user as any)?.id,
         ...form,
       });
 
       if (res.status === 201) {
+        await update({ role: "seller", shopStatus: "PENDING" });
         toast.success("Registration successful! Please wait for admin approval.");
         router.push("/");
       } else {

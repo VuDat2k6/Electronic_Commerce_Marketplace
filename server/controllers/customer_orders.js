@@ -17,7 +17,10 @@
 
 const prisma = require("../utils/db");
 const { validateOrderData, ValidationError } = require('../utils/validation');
-const { createOrderUpdateNotification } = require('../utils/notificationHelpers');
+const {
+  createOrderUpdateNotification,
+  createNewOrderNotification
+} = require('../utils/notificationHelpers');
 
 // ============================================================
 // HELPER FUNCTIONS
@@ -33,7 +36,13 @@ async function calculateOrderTotal(productIds, quantities) {
   for (let i = 0; i < productIds.length; i++) {
     const product = await prisma.product.findUnique({
       where: { id: productIds[i] },
-      select: { price: true, inStock: true }
+      select: {
+        price: true,
+        inStock: true,
+        status: true,
+        title: true,
+        seller: { select: { shopStatus: true } },
+      }
     });
     
     if (!product) {
@@ -41,6 +50,19 @@ async function calculateOrderTotal(productIds, quantities) {
     }
     
     const quantity = parseInt(quantities[i]) || 1;
+
+    if (product.status !== 'PUBLISHED') {
+      throw new ValidationError(`"${product.title}" is no longer available for purchase`, 'items');
+    }
+
+    if (product.seller?.shopStatus !== 'ACTIVE') {
+      throw new ValidationError(`Seller shop for "${product.title}" is not active`, 'items');
+    }
+
+    if (product.inStock < quantity) {
+      throw new ValidationError(`Insufficient stock for "${product.title}"`, 'items');
+    }
+
     total += product.price * quantity;
   }
   
@@ -167,7 +189,7 @@ async function createCustomerOrder(request, response) {
           phone: validatedData.phone,
           email: validatedData.email,
           company: validatedData.company,
-          adress: validatedData.adress,
+          address: validatedData.address,
           apartment: validatedData.apartment,
           postalCode: validatedData.postalCode,
           city: validatedData.city,
@@ -179,6 +201,8 @@ async function createCustomerOrder(request, response) {
         }
       });
 
+      const sellerNotifications = new Map();
+
       // Create order items and decrement stock atomically
       for (let i = 0; i < items.length; i++) {
         const productId = productIds[i];
@@ -187,8 +211,27 @@ async function createCustomerOrder(request, response) {
         // Get product price from DB
         const product = await tx.product.findUnique({
           where: { id: productId },
-          select: { price: true, sellerId: true }
+          select: {
+            price: true,
+            sellerId: true,
+            inStock: true,
+            status: true,
+            title: true,
+            seller: { select: { shopStatus: true } },
+          }
         });
+
+        if (!product || product.status !== 'PUBLISHED') {
+          throw new ValidationError('A product in your cart is no longer available', 'items');
+        }
+
+        if (product.seller?.shopStatus !== 'ACTIVE') {
+          throw new ValidationError(`Seller shop for "${product.title}" is not active`, 'items');
+        }
+
+        if (product.inStock < quantity) {
+          throw new ValidationError(`Insufficient stock for "${product.title}"`, 'items');
+        }
 
         // Create order item
         await tx.order_item.create({
@@ -201,17 +244,37 @@ async function createCustomerOrder(request, response) {
           }
         });
 
+        const existingNotification = sellerNotifications.get(product.sellerId) || {
+          sellerId: product.sellerId,
+          orderId: newOrder.id,
+          buyerName: [validatedData.name, validatedData.lastname].filter(Boolean).join(' ') || validatedData.email || 'A customer',
+          productCount: 0,
+          totalAmount: 0
+        };
+        existingNotification.productCount += quantity;
+        existingNotification.totalAmount += product.price * quantity;
+        sellerNotifications.set(product.sellerId, existingNotification);
+
         // Decrement stock with atomic update
-        await tx.product.update({
-          where: { id: productId },
+        const stockUpdate = await tx.product.updateMany({
+          where: {
+            id: productId,
+            status: 'PUBLISHED',
+            inStock: { gte: quantity },
+            seller: { is: { shopStatus: 'ACTIVE' } },
+          },
           data: { inStock: { decrement: quantity } }
-        }).catch(() => {
-          // Product might not exist or stock update failed
-          console.warn(`Failed to decrement stock for product ${productId}`);
         });
+
+        if (stockUpdate.count !== 1) {
+          throw new ValidationError(`"${product.title}" is no longer available in the requested quantity`, 'items');
+        }
       }
 
-      return newOrder;
+      return {
+        ...newOrder,
+        sellerNotifications: Array.from(sellerNotifications.values())
+      };
     });
 
     // Send order notification asynchronously (don't fail order creation)
@@ -225,6 +288,12 @@ async function createCustomerOrder(request, response) {
         console.warn('Failed to send order notification:', err.message);
       });
     }
+
+    await Promise.allSettled(
+      (order.sellerNotifications || []).map((notification) =>
+        createNewOrderNotification(notification.sellerId, notification)
+      )
+    );
 
     return response.status(201).json({
       id: order.id,
@@ -387,7 +456,7 @@ async function getCustomerOrder(request, response) {
         phone: true,
         email: true,
         company: true,
-        adress: true,
+        address: true,
         apartment: true,
         postalCode: true,
         city: true,

@@ -3,4 +3,4 @@ export { Card, CardHeader, CardBody, CardFooter } from "./Card";
 export { Badge, StatusBadge } from "./Badge";
 export { Input } from "./Input";
 export { Table } from "./Table";
-export { Skeleton, SkeletonCard, SkeletonTable } from "./Skeleton";
+export { default as Skeleton } from "./Skeleton";

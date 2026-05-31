@@ -16,23 +16,27 @@ import BuyNowSingleProductBtn from "./BuyNowSingleProductBtn";
 
 const SingleProductDynamicFields = ({ product }: { product: Product }) => {
   const [quantityCount, setQuantityCount] = useState<number>(1);
+  const isAvailable = Number(product.inStock) > 0;
+
   return (
     <>
-      <QuantityInput
-        quantityCount={quantityCount}
-        setQuantityCount={setQuantityCount}
-      />
-      {Boolean(product.inStock) && (
-        <div className="flex gap-x-5 max-[500px]:flex-col max-[500px]:items-center max-[500px]:gap-y-1">
-          <AddToCartSingleProductBtn
+      {isAvailable && (
+        <>
+          <QuantityInput
             quantityCount={quantityCount}
-            product={product}
+            setQuantityCount={setQuantityCount}
           />
-          <BuyNowSingleProductBtn
-            quantityCount={quantityCount}
-            product={product}
-          />
-        </div>
+          <div className="flex gap-x-5 max-[500px]:flex-col max-[500px]:items-center max-[500px]:gap-y-1">
+            <AddToCartSingleProductBtn
+              quantityCount={quantityCount}
+              product={product}
+            />
+            <BuyNowSingleProductBtn
+              quantityCount={quantityCount}
+              product={product}
+            />
+          </div>
+        </>
       )}
     </>
   );

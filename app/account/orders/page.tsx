@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { SectionTitle } from "@/components";
-import apiClient from "@/lib/api";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
 interface SubOrderProduct {
@@ -28,14 +26,12 @@ interface SubOrderProduct {
 interface SubOrder {
   id: string;
   merchantId: string;
-  merchantNameSnapshot: string;
   status: string;
   subTotal: number;
   shippingTotal: number;
   trackingNumber: string | null;
   createdAt: string;
   products: SubOrderProduct[];
-  merchant?: { id: string; name: string };
 }
 
 interface Order {
@@ -44,7 +40,7 @@ interface Order {
   lastname: string;
   email: string;
   phone: string;
-  adress: string;
+  address: string;
   apartment: string;
   city: string;
   country: string;
@@ -66,6 +62,9 @@ const STATUS_COLORS: Record<string, string> = {
   PARTIALLY_FULFILLED: "bg-orange-100 text-orange-800",
   PARTIALLY_CANCELLED: "bg-orange-100 text-orange-800",
   PAID: "bg-blue-100 text-blue-800",
+  processing: "bg-blue-100 text-blue-800",
+  delivered: "bg-green-100 text-green-800",
+  canceled: "bg-red-100 text-red-800",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -79,48 +78,33 @@ const STATUS_LABELS: Record<string, string> = {
   PARTIALLY_FULFILLED: "Partially Fulfilled",
   PARTIALLY_CANCELLED: "Partially Cancelled",
   PAID: "Paid",
+  processing: "Processing",
+  delivered: "Delivered",
+  canceled: "Canceled",
+};
+
+const getImageSrc = (image?: string | null) => {
+  if (!image) return "/product_placeholder.jpg";
+  if (image.startsWith("http") || image.startsWith("/")) return image;
+  return `/${image}`;
 };
 
 const AccountOrdersPage = () => {
   const { data: session } = useSession();
-  const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    fetchOrders();
-  }, [session]);
-
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      // 获取用户 ID
-      let customerId = "";
-      if (session?.user?.email) {
-        try {
-          const userResponse = await apiClient.get(`/api/users/email/${session.user.email}`);
-          if (userResponse.ok) {
-            const userData = await userResponse.json();
-            customerId = userData.id;
-          }
-        } catch (e) {
-          console.error("Error fetching user:", e);
-        }
-      }
-
-      if (!customerId) {
+      if (!session?.user) {
         setOrders([]);
         setLoading(false);
         return;
       }
 
-      // 设置 header 并获取订单
-      const response = await fetch(`/api/account/orders`, {
-        headers: {
-          "x-customer-id": customerId,
-        },
-      });
+      const response = await fetch(`/api/account/orders`, { cache: "no-store" });
 
       if (!response.ok) {
         throw new Error("Failed to fetch orders");
@@ -134,7 +118,11 @@ const AccountOrdersPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
   const toggleOrder = (orderId: string) => {
     setExpandedOrders((prev) => {
@@ -157,8 +145,8 @@ const AccountOrdersPage = () => {
     });
   };
 
-  const formatPrice = (cents: number) => {
-    return (cents / 100).toFixed(2);
+  const formatPrice = (amount: number) => {
+    return amount.toLocaleString("vi-VN") + " VND";
   };
 
   if (loading) {
@@ -225,7 +213,7 @@ const AccountOrdersPage = () => {
                     <div>
                       <p className="text-xs text-gray-500 uppercase">Total</p>
                       <p className="text-sm font-medium text-gray-900">
-                        ${formatPrice(order.total)}
+                        {formatPrice(order.total)}
                       </p>
                     </div>
                     <div>
@@ -264,7 +252,7 @@ const AccountOrdersPage = () => {
                       <p className="text-sm text-gray-600">
                         {order.name} {order.lastname}
                         <br />
-                        {order.adress}
+                        {order.address}
                         {order.apartment ? `, ${order.apartment}` : ""}
                         <br />
                         {order.city}, {order.country} {order.postalCode}
@@ -281,10 +269,10 @@ const AccountOrdersPage = () => {
                           <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                             <div className="flex items-center gap-3">
                               <Link
-                                href={`/shop/${subOrder.merchantId}`}
+                                href={`/seller/${subOrder.merchantId}`}
                                 className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
                               >
-                                {subOrder.merchant?.name || subOrder.merchantNameSnapshot}
+                                {subOrder.products[0]?.merchantNameSnapshot || "Seller"}
                               </Link>
                               <span
                                 className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -315,7 +303,7 @@ const AccountOrdersPage = () => {
                                 <div className="flex-shrink-0">
                                   {item.productImageSnapshot ? (
                                     <Image
-                                      src={`/${item.productImageSnapshot}`}
+                                      src={getImageSrc(item.productImageSnapshot)}
                                       alt={item.productNameSnapshot}
                                       width={64}
                                       height={64}
@@ -332,11 +320,11 @@ const AccountOrdersPage = () => {
                                     {item.productNameSnapshot}
                                   </p>
                                   <p className="text-xs text-gray-500">
-                                    Qty: {item.quantity} × ${formatPrice(item.unitPriceSnapshot)}
+                                    Qty: {item.quantity} × {formatPrice(item.unitPriceSnapshot)}
                                   </p>
                                 </div>
                                 <div className="text-sm font-medium text-gray-900">
-                                  ${formatPrice(item.unitPriceSnapshot * item.quantity)}
+                                  {formatPrice(item.unitPriceSnapshot * item.quantity)}
                                 </div>
                               </div>
                             ))}
@@ -348,21 +336,21 @@ const AccountOrdersPage = () => {
                               <div className="flex justify-between gap-8 text-sm">
                                 <span className="text-gray-500">Subtotal:</span>
                                 <span className="text-gray-900">
-                                  ${formatPrice(subOrder.subTotal)}
+                                  {formatPrice(subOrder.subTotal)}
                                 </span>
                               </div>
                               {subOrder.shippingTotal > 0 && (
                                 <div className="flex justify-between gap-8 text-sm">
                                   <span className="text-gray-500">Shipping:</span>
                                   <span className="text-gray-900">
-                                    ${formatPrice(subOrder.shippingTotal)}
+                                    {formatPrice(subOrder.shippingTotal)}
                                   </span>
                                 </div>
                               )}
                               <div className="flex justify-between gap-8 text-sm font-medium">
                                 <span>SubOrder Total:</span>
                                 <span className="text-blue-600">
-                                  ${formatPrice(subOrder.subTotal + subOrder.shippingTotal)}
+                                  {formatPrice(subOrder.subTotal + subOrder.shippingTotal)}
                                 </span>
                               </div>
                             </div>
@@ -379,7 +367,7 @@ const AccountOrdersPage = () => {
                             Order Total (incl. all shops)
                           </p>
                           <p className="text-xl font-bold text-gray-900">
-                            ${formatPrice(order.total)}
+                            {formatPrice(order.total)}
                           </p>
                         </div>
                       </div>

@@ -184,6 +184,7 @@ const NotificationsPage = () => {
               className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             >
               <option value="all">All Types</option>
+              <option value={NotificationType.NEW_ORDER}>New Orders</option>
               <option value={NotificationType.ORDER_UPDATE}>Order Updates</option>
               <option value={NotificationType.PAYMENT_STATUS}>Payment Status</option>
               <option value={NotificationType.PROMOTION}>Promotions</option>

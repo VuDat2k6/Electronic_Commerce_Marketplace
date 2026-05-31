@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { DashboardSidebar } from "@/components";
 import apiClient from "@/lib/api";
 import toast from "react-hot-toast";
 
@@ -47,14 +48,19 @@ const AdminSellersPage = () => {
 
   const handleApprove = async (id: string) => {
     try {
+      console.log('Sending approve request for id:', id);
       const res = await apiClient.patch(`/api/admin/sellers/${id}/approve`);
+      console.log('Approve response status:', res.status);
       if (res.ok) {
         toast.success("Seller approved successfully!");
         fetchSellers();
       } else {
+        const text = await res.text();
+        console.error("Error approving seller:", text);
         toast.error("Error approving seller");
       }
-    } catch {
+    } catch (e) {
+      console.error("Exception approving seller:", e);
       toast.error("Error approving seller");
     }
   };
@@ -93,8 +99,10 @@ const AdminSellersPage = () => {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="bg-white flex justify-start max-w-screen-2xl mx-auto h-full max-xl:flex-col max-xl:h-fit max-xl:gap-y-4">
+      <DashboardSidebar />
+      <div className="w-full">
+        <div className="flex justify-between items-center mb-6 px-5 pt-5">
         <h1 className="text-2xl font-bold">Sellers Management</h1>
         <div className="flex gap-2">
           {(["ALL", "PENDING", "ACTIVE", "SUSPENDED"] as const).map((f) => (
@@ -187,6 +195,7 @@ const AdminSellersPage = () => {
           </table>
         </div>
       )}
+    </div>
     </div>
   );
 };

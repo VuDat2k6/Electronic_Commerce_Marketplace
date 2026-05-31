@@ -13,10 +13,20 @@ async function getProductBySlug(request, response) {
   }
 
   // Use findUnique instead of findMany for better performance
-  const product = await prisma.product.findUnique({
-    where: { slug: slug },
+  const product = await prisma.product.findFirst({
+    where: {
+      slug: slug,
+      status: "PUBLISHED",
+      seller: {
+        is: {
+          role: "seller",
+          shopStatus: "ACTIVE",
+        },
+      },
+    },
     include: {
-      category: true
+      category: true,
+      seller: { select: { id: true, shopName: true } }
     }
   });
 
@@ -55,10 +65,18 @@ async function getProductsBySlugs(request, response) {
   // Fetch all products in a single query
   const products = await prisma.product.findMany({
     where: {
-      slug: { in: slugArray }
+      slug: { in: slugArray },
+      status: "PUBLISHED",
+      seller: {
+        is: {
+          role: "seller",
+          shopStatus: "ACTIVE",
+        },
+      },
     },
     include: {
-      category: { select: { id: true, name: true } }
+      category: { select: { id: true, name: true } },
+      seller: { select: { id: true, shopName: true } }
     }
   });
 

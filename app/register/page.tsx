@@ -129,7 +129,7 @@ const RegisterPage = () => {
 
       if (res.ok) {
         toast.success("Registration successful! Please log in.");
-        setTimeout(() => router.push("/login"), 1000);
+        setTimeout(() => window.location.href = "/login", 1000);
       } else {
         if (data.details && Array.isArray(data.details)) {
           const errorMessage = data.details.map((err: { message: string }) => err.message).join(", ");

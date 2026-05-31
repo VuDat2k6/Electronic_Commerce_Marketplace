@@ -16,15 +16,17 @@ export default function SellerSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const userId = (session?.user as any)?.id;
+
   useEffect(() => {
     const fetchSettings = async () => {
-      if (!session?.user?.id) {
+      if (!userId) {
         setLoading(false);
         return;
       }
 
       try {
-        const res = await apiClient.get(`/api/seller/settings?sellerId=${session.user.id}`);
+        const res = await apiClient.get(`/api/seller/settings?sellerId=${userId}`);
 
         if (!res.ok) {
           throw new Error("Failed to fetch settings");
@@ -45,10 +47,10 @@ export default function SellerSettingsPage() {
       }
     };
     fetchSettings();
-  }, [session?.user?.id]);
+  }, [userId]);
 
   const handleSave = async () => {
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
       toast.error("Seller information not found");
       return;
     }
@@ -61,7 +63,7 @@ export default function SellerSettingsPage() {
     setSaving(true);
     try {
       const res = await apiClient.put("/api/seller/settings", {
-        sellerId: session.user.id,
+        sellerId: (session?.user as any)?.id,
         ...form,
       });
       if (res.ok) {

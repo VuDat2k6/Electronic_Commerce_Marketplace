@@ -141,6 +141,54 @@ const app = express();
 // ============================================================
 
 /**
+ * Allowed origins list
+ * Frontend runs on port 3000, backend API on port 3001
+ * Also reads from environment variables for flexibility
+ */
+const allowedOrigins = [
+  'http://localhost:3000',    // Local development frontend
+  'http://localhost:3001',    // Local development backend (if needed)
+  process.env.NEXTAUTH_URL,    // NextAuth configured URL
+  process.env.FRONTEND_URL,    // Custom frontend URL from env
+].filter(Boolean); // Remove undefined values
+
+/**
+ * CORS options with origin validation
+ * - Validates origin against whitelist
+ * - Allows localhost in development mode
+ * - Rejects unauthorized origins in production
+ */
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Allow any localhost origin in development
+    if (process.env.NODE_ENV === 'development' && origin.startsWith('http://localhost:')) {
+      return callback(null, true);
+    }
+
+    // Reject unauthorized origins
+    const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+    return callback(new Error(msg), false);
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],  // Allowed HTTP methods
+  allowedHeaders: ["Content-Type", "Authorization"],  // Allowed headers
+  credentials: true, // Allow cookies and authorization headers
+};
+
+/**
+ * CORS middleware - Enables cross-origin requests
+ * Must be placed BEFORE rate limiters and security headers so OPTIONS requests are instantly fulfilled
+ */
+app.use(cors(corsOptions));
+
+/**
  * Trust proxy - Enables accurate client IP detection
  * Required when server is behind a reverse proxy (e.g., Nginx, load balancer)
  */
@@ -198,53 +246,6 @@ app.use(requestLogger);
 app.use(errorLogger);
 
 // ============================================================
-// CORS CONFIGURATION
-// Controls which origins can access the API
-// ============================================================
-
-/**
- * Allowed origins list
- * Frontend runs on port 3000, backend API on port 3001
- * Also reads from environment variables for flexibility
- */
-const allowedOrigins = [
-  'http://localhost:3000',    // Local development frontend
-  'http://localhost:3001',    // Local development backend (if needed)
-  process.env.NEXTAUTH_URL,    // NextAuth configured URL
-  process.env.FRONTEND_URL,    // Custom frontend URL from env
-].filter(Boolean); // Remove undefined values
-
-/**
- * CORS options with origin validation
- * - Validates origin against whitelist
- * - Allows localhost in development mode
- * - Rejects unauthorized origins in production
- */
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
-
-    // Check if origin is in allowed list
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    // Allow any localhost origin in development
-    if (process.env.NODE_ENV === 'development' && origin.startsWith('http://localhost:')) {
-      return callback(null, true);
-    }
-    
-    // Reject unauthorized origins
-    const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-    return callback(new Error(msg), false);
-  },
-  methods: ["GET", "POST", "PUT", "DELETE"],  // Allowed HTTP methods
-  allowedHeaders: ["Content-Type", "Authorization"],  // Allowed headers
-  credentials: true, // Allow cookies and authorization headers
-};
-
-// ============================================================
 // BODY PARSING AND FILE UPLOADS
 // ============================================================
 
@@ -259,11 +260,6 @@ app.use(generalLimiter);
  * Necessary for API requests with JSON payload
  */
 app.use(express.json());
-
-/**
- * CORS middleware - Enables cross-origin requests
- */
-app.use(cors(corsOptions));
 
 /**
  * File upload middleware - Enables multipart/form-data parsing
@@ -283,7 +279,6 @@ app.use("/api/order-product", orderLimiter);       // Order items
 app.use("/api/images", uploadLimiter);             // Image uploads
 app.use("/api/main-image", uploadLimiter);         // Main image uploads
 app.use("/api/bulk-upload", uploadLimiter);        // CSV bulk imports
-app.use("/api/seller", uploadLimiter);             // Seller bulk uploads
 
 /**
  * Auth limiter - Stricter limits for authentication endpoints

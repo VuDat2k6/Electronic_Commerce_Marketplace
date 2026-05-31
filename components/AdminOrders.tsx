@@ -61,7 +61,7 @@ const AdminOrders = () => {
 
   const formatPrice = (price: number) => {
     if (!price) return '—';
-    return (price / 100).toLocaleString('vi-VN') + '₫';
+    return price.toLocaleString('vi-VN') + '₫';
   };
 
   const formatDate = (dateStr: string) => {

@@ -88,6 +88,52 @@ const createOrderUpdateNotification = async (userId, orderStatus, orderId, total
 };
 
 /**
+ * Create a seller notification when a new order is placed
+ */
+const createNewOrderNotification = async (sellerId, orderDetails) => {
+  try {
+    const {
+      orderId,
+      subOrderId = null,
+      buyerName = 'A customer',
+      productCount = 0,
+      totalAmount = null
+    } = orderDetails || {};
+
+    if (!sellerId || !orderId) {
+      throw new Error('sellerId and orderId are required');
+    }
+
+    const notificationId = await generateId();
+    const productLabel = Number(productCount) === 1 ? 'item' : 'items';
+
+    const notification = await prisma.notification.create({
+      data: {
+        id: notificationId,
+        userId: sellerId,
+        title: 'New order received',
+        message: `${buyerName} placed order #${orderId} with ${productCount} ${productLabel}.`,
+        type: 'NEW_ORDER',
+        priority: 'HIGH',
+        isRead: false,
+        metadata: {
+          orderId,
+          ...(subOrderId && { subOrderId }),
+          productCount,
+          ...(totalAmount !== null && { totalAmount })
+        }
+      }
+    });
+
+    console.log(`New order notification created for seller ${sellerId}: ${orderId}`);
+    return notification;
+  } catch (error) {
+    console.error('Error creating new order notification:', error);
+    throw error;
+  }
+};
+
+/**
  * Create a payment status notification
  */
 const createPaymentNotification = async (userId, paymentStatus, amount, orderId) => {
@@ -246,6 +292,7 @@ const createBulkNotifications = async (userIds, title, message, type = 'SYSTEM_A
 
 module.exports = {
   createOrderUpdateNotification,
+  createNewOrderNotification,
   createPaymentNotification,
   createPromotionNotification,
   createSystemAlertNotification,

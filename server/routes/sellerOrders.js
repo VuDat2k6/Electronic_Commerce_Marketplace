@@ -36,7 +36,7 @@ router.get("/", asyncHandler(async (req, res) => {
             lastname: true,
             email: true,
             phone: true,
-            adress: true,
+            address: true,
             apartment: true,
             city: true,
             country: true,

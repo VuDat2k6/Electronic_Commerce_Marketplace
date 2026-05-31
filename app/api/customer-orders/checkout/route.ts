@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { createCustomerOrder } from "../../../../server/services/order.service";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/authOptions";
 
 interface CheckoutRequestBody {
-  customerId?: string;
   name?: string;
   lastname?: string;
   phone?: string;
   email?: string;
   company?: string;
-  adress?: string;
+  address?: string;
   apartment?: string;
   postalCode?: string;
   city?: string;
@@ -21,29 +22,18 @@ interface CheckoutRequestBody {
     sellerId?: string;
   }>;
   voucherCodes?: string[];
-}
-
-function resolveCustomerId(request: Request, bodyCustomerId?: string): string {
-  if (bodyCustomerId && bodyCustomerId.trim()) {
-    return bodyCustomerId.trim();
-  }
-
-  const headerCustomerId = request.headers.get("x-customer-id");
-  if (headerCustomerId && headerCustomerId.trim()) {
-    return headerCustomerId.trim();
-  }
-
-  const fallbackCustomerId = process.env.NEXT_PUBLIC_DEV_CUSTOMER_ID;
-  if (fallbackCustomerId && fallbackCustomerId.trim()) {
-    return fallbackCustomerId.trim();
-  }
-
-  return "";
+  paymentMethod?: "COD" | "BANK_TRANSFER" | "CARD";
 }
 
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CheckoutRequestBody;
+    const session = await getServerSession(authOptions) as any;
+    const customerId = session?.user?.id?.trim();
+
+    if (!customerId) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
 
     if (!body.items || body.items.length === 0) {
       return NextResponse.json(
@@ -53,13 +43,13 @@ export async function POST(request: Request) {
     }
 
     const order = await createCustomerOrder({
-      customerId: resolveCustomerId(request, body.customerId),
+      customerId,
       name: body.name,
       lastname: body.lastname,
       phone: body.phone,
       email: body.email,
       company: body.company,
-      adress: body.adress,
+      address: body.address,
       apartment: body.apartment,
       postalCode: body.postalCode,
       city: body.city,
@@ -67,6 +57,7 @@ export async function POST(request: Request) {
       orderNotice: body.orderNotice,
       items: body.items,
       voucherCodes: body.voucherCodes,
+      paymentMethod: body.paymentMethod,
     });
 
     return NextResponse.json({ order }, { status: 201 });

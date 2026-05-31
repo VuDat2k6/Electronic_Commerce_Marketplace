@@ -1,15 +1,117 @@
 // server/controllers/sellerVoucher.js
 const prisma = require('../utils/db');
-const { asyncHandler } = require('../utils/errorHandler');
+const { AppError, asyncHandler } = require('../utils/errorHandler');
 
-// GET /api/seller/vouchers?sellerId=xxx
+const DISCOUNT_TYPES = ['PERCENTAGE', 'FIXED'];
+
+function getSellerId(req) {
+  return req.user.role === 'admin' && (req.query.sellerId || req.body.sellerId)
+    ? (req.query.sellerId || req.body.sellerId)
+    : req.user.id;
+}
+
+function normalizeCode(code) {
+  return String(code || '').trim().toUpperCase();
+}
+
+function normalizeDiscountType(discountType) {
+  return String(discountType || '').trim().toUpperCase();
+}
+
+function parsePositiveInt(value, fieldName) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new AppError(`${fieldName} must be a positive number`, 400);
+  }
+  return parsed;
+}
+
+function parseOptionalPositiveInt(value, fieldName) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+  return parsePositiveInt(value, fieldName);
+}
+
+function parseExpiryDate(value) {
+  if (!value) {
+    return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new AppError('expiresAt must be a valid date', 400);
+  }
+  return parsed;
+}
+
+async function ensureSellerMerchant(sellerId) {
+  const seller = await prisma.user.findUnique({
+    where: { id: sellerId },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      shopName: true,
+      shopDescription: true,
+      shopPhone: true,
+      shopAddress: true,
+      shopStatus: true,
+    },
+  });
+
+  if (!seller) {
+    throw new AppError('Seller not found', 404);
+  }
+
+  if (seller.role !== 'seller') {
+    throw new AppError('User is not a seller', 400);
+  }
+
+  if (seller.shopStatus !== 'ACTIVE') {
+    throw new AppError('Seller shop must be active before creating vouchers', 403);
+  }
+
+  const merchantData = {
+    name: seller.shopName || seller.email || 'Seller shop',
+    description: seller.shopDescription || null,
+    email: seller.email || null,
+    phone: seller.shopPhone || null,
+    address: seller.shopAddress || null,
+    status: seller.shopStatus,
+  };
+
+  return prisma.merchant.upsert({
+    where: { id: seller.id },
+    update: merchantData,
+    create: {
+      id: seller.id,
+      ...merchantData,
+    },
+  });
+}
+
+function validateDiscount(discountType, discountValue) {
+  if (!DISCOUNT_TYPES.includes(discountType)) {
+    throw new AppError('discountType must be PERCENTAGE or FIXED', 400);
+  }
+
+  const parsedDiscountValue = parsePositiveInt(discountValue, 'discountValue');
+
+  if (discountType === 'PERCENTAGE' && (parsedDiscountValue < 1 || parsedDiscountValue > 100)) {
+    throw new AppError('Percentage discount must be between 1 and 100', 400);
+  }
+
+  return parsedDiscountValue;
+}
+
+// GET /api/seller/vouchers
 const getSellerVouchers = asyncHandler(async (req, res) => {
-  const { sellerId } = req.query;
-  if (!sellerId) throw new Error('sellerId is required');
+  const sellerId = getSellerId(req);
 
   const vouchers = await prisma.voucher.findMany({
     where: { merchantId: sellerId },
-    orderBy: { createdAt: 'desc' }
+    orderBy: { startsAt: 'desc' }
   });
 
   return res.json(vouchers);
@@ -17,36 +119,40 @@ const getSellerVouchers = asyncHandler(async (req, res) => {
 
 // POST /api/seller/vouchers
 const createVoucher = asyncHandler(async (req, res) => {
-  const { sellerId, code, title, description, discountType, discountValue, minOrderValue, maxDiscount, usageLimit, expiresAt } = req.body;
+  const sellerId = getSellerId(req);
+  const { code, title, description, discountType, discountValue, minOrderValue, maxDiscount, usageLimit, expiresAt } = req.body;
+  const normalizedCode = normalizeCode(code);
+  const normalizedTitle = String(title || '').trim();
+  const normalizedDiscountType = normalizeDiscountType(discountType);
 
-  if (!sellerId || !code || !title || !discountType || !discountValue) {
-    throw new Error('sellerId, code, title, discountType, and discountValue are required');
+  if (!sellerId || !normalizedCode || !normalizedTitle || !normalizedDiscountType || discountValue === undefined || discountValue === null || discountValue === '') {
+    throw new AppError('sellerId, code, title, discountType, and discountValue are required', 400);
   }
 
-  if (!['PERCENTAGE', 'FIXED'].includes(discountType)) {
-    throw new Error('discountType must be PERCENTAGE or FIXED');
-  }
+  const parsedDiscountValue = validateDiscount(normalizedDiscountType, discountValue);
+  const parsedExpiresAt = parseExpiryDate(expiresAt);
+  const parsedMinOrderValue = parseOptionalPositiveInt(minOrderValue, 'minOrderValue');
+  const parsedMaxDiscount = parseOptionalPositiveInt(maxDiscount, 'maxDiscount');
+  const parsedUsageLimit = parseOptionalPositiveInt(usageLimit, 'usageLimit');
 
-  if (discountType === 'PERCENTAGE' && (discountValue < 1 || discountValue > 100)) {
-    throw new Error('Percentage discount must be between 1 and 100');
-  }
+  await ensureSellerMerchant(sellerId);
 
   // Check for duplicate code
-  const existing = await prisma.voucher.findUnique({ where: { code } });
-  if (existing) throw new Error('Voucher code already exists');
+  const existing = await prisma.voucher.findUnique({ where: { code: normalizedCode } });
+  if (existing) throw new AppError('Voucher code already exists', 409);
 
   const voucher = await prisma.voucher.create({
     data: {
-      code: code.toUpperCase(),
-      title,
-      description: description || null,
-      discountType,
-      discountValue: parseInt(discountValue),
-      minOrderValue: minOrderValue ? parseInt(minOrderValue) : null,
-      maxDiscount: maxDiscount ? parseInt(maxDiscount) : null,
-      usageLimit: usageLimit ? parseInt(usageLimit) : null,
+      code: normalizedCode,
+      title: normalizedTitle,
+      description: description ? String(description).trim() : null,
+      discountType: normalizedDiscountType,
+      discountValue: parsedDiscountValue,
+      minOrderValue: parsedMinOrderValue,
+      maxDiscount: parsedMaxDiscount,
+      usageLimit: parsedUsageLimit,
       merchantId: sellerId,
-      expiresAt: expiresAt ? new Date(expiresAt) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      expiresAt: parsedExpiresAt,
       isActive: true,
     }
   });
@@ -57,31 +163,41 @@ const createVoucher = asyncHandler(async (req, res) => {
 // PUT /api/seller/vouchers/:id
 const updateVoucher = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { sellerId, title, description, discountType, discountValue, minOrderValue, maxDiscount, usageLimit, expiresAt, isActive } = req.body;
+  const sellerId = getSellerId(req);
+  const { title, description, discountType, discountValue, minOrderValue, maxDiscount, usageLimit, expiresAt, isActive } = req.body;
 
   const voucher = await prisma.voucher.findUnique({ where: { id } });
-  if (!voucher) throw new Error('Voucher not found');
-  if (voucher.merchantId !== sellerId) throw new Error('You do not have permission to edit this voucher');
+  if (!voucher) throw new AppError('Voucher not found', 404);
+  if (voucher.merchantId !== sellerId) throw new AppError('You do not have permission to edit this voucher', 403);
 
-  if (discountType && !['PERCENTAGE', 'FIXED'].includes(discountType)) {
-    throw new Error('discountType must be PERCENTAGE or FIXED');
+  const normalizedDiscountType = discountType ? normalizeDiscountType(discountType) : voucher.discountType;
+  let parsedDiscountValue = voucher.discountValue;
+
+  if (discountValue !== undefined && discountValue !== null && discountValue !== '') {
+    parsedDiscountValue = validateDiscount(normalizedDiscountType, discountValue);
+  } else if (!DISCOUNT_TYPES.includes(normalizedDiscountType)) {
+    throw new AppError('discountType must be PERCENTAGE or FIXED', 400);
   }
 
-  if (discountType === 'PERCENTAGE' && discountValue && (discountValue < 1 || discountValue > 100)) {
-    throw new Error('Percentage discount must be between 1 and 100');
+  if (normalizedDiscountType === 'PERCENTAGE' && (parsedDiscountValue < 1 || parsedDiscountValue > 100)) {
+    throw new AppError('Percentage discount must be between 1 and 100', 400);
+  }
+
+  if (title !== undefined && !String(title).trim()) {
+    throw new AppError('title cannot be empty', 400);
   }
 
   const updated = await prisma.voucher.update({
     where: { id },
     data: {
-      title: title ?? voucher.title,
-      description: description ?? voucher.description,
-      discountType: discountType ?? voucher.discountType,
-      discountValue: discountValue ? parseInt(discountValue) : voucher.discountValue,
-      minOrderValue: minOrderValue !== undefined ? (minOrderValue ? parseInt(minOrderValue) : null) : voucher.minOrderValue,
-      maxDiscount: maxDiscount !== undefined ? (maxDiscount ? parseInt(maxDiscount) : null) : voucher.maxDiscount,
-      usageLimit: usageLimit !== undefined ? (usageLimit ? parseInt(usageLimit) : null) : voucher.usageLimit,
-      expiresAt: expiresAt ? new Date(expiresAt) : voucher.expiresAt,
+      title: title !== undefined ? String(title).trim() : voucher.title,
+      description: description !== undefined ? (description ? String(description).trim() : null) : voucher.description,
+      discountType: normalizedDiscountType,
+      discountValue: parsedDiscountValue,
+      minOrderValue: minOrderValue !== undefined ? parseOptionalPositiveInt(minOrderValue, 'minOrderValue') : voucher.minOrderValue,
+      maxDiscount: maxDiscount !== undefined ? parseOptionalPositiveInt(maxDiscount, 'maxDiscount') : voucher.maxDiscount,
+      usageLimit: usageLimit !== undefined ? parseOptionalPositiveInt(usageLimit, 'usageLimit') : voucher.usageLimit,
+      expiresAt: expiresAt ? parseExpiryDate(expiresAt) : voucher.expiresAt,
       isActive: isActive !== undefined ? isActive : voucher.isActive,
     }
   });
@@ -92,11 +208,11 @@ const updateVoucher = asyncHandler(async (req, res) => {
 // DELETE /api/seller/vouchers/:id
 const deleteVoucher = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { sellerId } = req.body;
+  const sellerId = getSellerId(req);
 
   const voucher = await prisma.voucher.findUnique({ where: { id } });
-  if (!voucher) throw new Error('Voucher not found');
-  if (voucher.merchantId !== sellerId) throw new Error('You do not have permission to delete this voucher');
+  if (!voucher) throw new AppError('Voucher not found', 404);
+  if (voucher.merchantId !== sellerId) throw new AppError('You do not have permission to delete this voucher', 403);
 
   await prisma.voucher.delete({ where: { id } });
   return res.status(204).send();

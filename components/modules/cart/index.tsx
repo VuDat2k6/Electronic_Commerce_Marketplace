@@ -1,13 +1,12 @@
 // CartModule - Clean, modern design
 "use client";
 
-import { useProductStore, CartGroup } from "@/app/_zustand/store";
+import { useProductStore as useCartStore, CartGroup } from "@/app/_zustand/store";
 import toast from "react-hot-toast";
 import Image from "next/image";
 import Link from "next/link";
 import { Minus, Plus, Trash2, ArrowRight, Store } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useProductStore as useCartStore } from "@/app/_zustand/store";
 
 export const CartModule = () => {
   const {
@@ -22,7 +21,7 @@ export const CartModule = () => {
 
   const [removingId, setRemovingId] = useState<string | null>(null);
 
-  const cartGroups = useMemo(() => getCartGroups(), [products]);
+  const cartGroups = getCartGroups();
 
   const cartTotals = useMemo(() => {
     const subtotal = total;
@@ -52,7 +51,7 @@ export const CartModule = () => {
   };
 
   const formatPrice = (cents: number) => {
-    return (cents / 100).toLocaleString('vi-VN') + '₫';
+    return cents.toLocaleString('vi-VN') + '₫';
   };
 
   return (
@@ -89,11 +88,11 @@ export const CartModule = () => {
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-4">
             {cartGroups.map((group: CartGroup) => (
-              <div key={group.merchantId} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              <div key={group.sellerId} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                 {/* Store Header */}
                 <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-gray-50">
                   <Store className="w-4 h-4 text-gray-400" />
-                  <span className="font-medium text-gray-700">{group.merchantName}</span>
+                  <span className="font-medium text-gray-700">{group.sellerName}</span>
                   <span className="text-xs text-gray-400 ml-auto">{group.items.length} items</span>
                 </div>
 
@@ -102,7 +101,7 @@ export const CartModule = () => {
                   {group.items.map((product) => (
                     <div key={product.id} className={`p-5 flex gap-4 ${removingId === product.id ? "opacity-50" : ""}`}>
                       <Link href={`/product/${product.slug || product.id}`} className="flex-shrink-0">
-                        <Image width={96} height={96} src={product?.image ? `/${product.image}` : "/product_placeholder.jpg"} alt={product.title} className="w-24 h-24 rounded-xl object-cover" />
+                        <Image width={96} height={96} src={product?.image ? (product.image.startsWith('http') || product.image.startsWith('/') ? product.image : `/${product.image}`) : "/product_placeholder.jpg"} alt={product.title} className="w-24 h-24 rounded-xl object-cover" />
                       </Link>
 
                       <div className="flex-1 min-w-0">

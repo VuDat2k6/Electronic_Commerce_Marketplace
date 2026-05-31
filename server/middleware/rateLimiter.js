@@ -14,6 +14,15 @@
 
 const rateLimit = require('express-rate-limit');
 
+const skipPreflightRequests = (request) => request.method === 'OPTIONS';
+
+function readPositiveInteger(name, fallback) {
+  const configuredValue = Number.parseInt(process.env[name] || '', 10);
+  return Number.isInteger(configuredValue) && configuredValue > 0 ? configuredValue : fallback;
+}
+
+const generalRateLimitMax = readPositiveInteger('GENERAL_RATE_LIMIT_MAX', 1000);
+
 // ============================================================
 // RATE LIMITING CONFIGURATION
 // 
@@ -32,14 +41,14 @@ const rateLimit = require('express-rate-limit');
 /**
  * General API rate limiter
  * - Window: 15 minutes
- * - Limit: 100 requests per IP
+ * - Limit: configurable baseline, default 1000 requests per IP
  * 
  * This is the baseline limiter applied to all routes.
  * More specific limiters override for certain endpoints.
  */
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: generalRateLimitMax,
   message: {
     error: 'Too many requests from this IP, please try again later.',
     code: 'RATE_LIMIT_EXCEEDED',
@@ -47,8 +56,8 @@ const generalLimiter = rateLimit({
   },
   standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  // NEVER skip in development - security must be consistent
-  skip: () => false,
+  // CORS negotiation is not application traffic and must not exhaust quotas.
+  skip: skipPreflightRequests,
   handler: (req, res) => {
     res.status(429).json({
       error: 'Too many requests from this IP, please try again later.',
@@ -82,7 +91,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false, // Count all attempts (success and failure)
-  skip: () => false,
+  skip: skipPreflightRequests,
   handler: (req, res) => {
     res.status(429).json({
       error: 'Too many authentication attempts. Please try again in 15 minutes.',
@@ -109,7 +118,7 @@ const registerLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => false,
+  skip: skipPreflightRequests,
   handler: (req, res) => {
     res.status(429).json({
       error: 'Too many registration attempts, please try again in 1 hour.',
@@ -141,7 +150,7 @@ const userManagementLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => false,
+  skip: skipPreflightRequests,
   handler: (req, res) => {
     res.status(429).json({
       error: 'Too many user management requests, please try again later.',
@@ -175,7 +184,7 @@ const uploadLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => false,
+  skip: skipPreflightRequests,
   handler: (req, res) => {
     res.status(429).json({
       error: 'Too many file uploads, please try again later.',
@@ -208,7 +217,7 @@ const searchLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => false,
+  skip: skipPreflightRequests,
   handler: (req, res) => {
     res.status(429).json({
       error: 'Too many search requests, please try again in 1 minute.',
@@ -241,7 +250,7 @@ const orderLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => false,
+  skip: skipPreflightRequests,
   handler: (req, res) => {
     res.status(429).json({
       error: 'Too many order operations, please try again later.',
@@ -256,7 +265,7 @@ const orderLimiter = rateLimit({
 // ============================================================
 
 module.exports = {
-  generalLimiter,        // General API protection (100/15min)
+  generalLimiter,        // General API protection (configurable baseline/15min)
   authLimiter,           // Login protection (5/15min) - STRICT
   registerLimiter,       // Registration protection (10/hour)
   userManagementLimiter,  // User API protection (50/15min)
@@ -270,7 +279,7 @@ module.exports = {
  * 
  * Endpoint              | Window    | Limit
  * --------------------- | --------- | -----
- * General API           | 15 min    | 100
+ * General API           | 15 min    | GENERAL_RATE_LIMIT_MAX (default 1000)
  * Login (authLimiter)   | 15 min    | 5 (STRICT)
  * Registration          | 1 hour    | 10
  * User Management       | 15 min    | 50

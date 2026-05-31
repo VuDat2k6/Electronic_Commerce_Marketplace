@@ -37,10 +37,12 @@ const CategoryMenu = () => {
                 className="group flex flex-col items-center gap-3 p-6 bg-white hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50 rounded-2xl border border-gray-100 hover:border-purple-200 shadow-sm hover:shadow-lg transition-all duration-300"
               >
                 <div className="w-12 h-12 flex items-center justify-center bg-gradient-to-br from-purple-100 to-pink-100 group-hover:from-purple-200 group-hover:to-pink-200 rounded-xl transition-all">
-                  <img
+                  <Image
                     src={item.src}
                     alt={item.title}
-                    className="w-8 h-8 object-contain"
+                    width={32}
+                    height={32}
+                    className="h-8 w-8 object-contain"
                   />
                 </div>
                 <span className="text-sm font-semibold text-gray-700 group-hover:text-purple-600 text-center transition-colors">

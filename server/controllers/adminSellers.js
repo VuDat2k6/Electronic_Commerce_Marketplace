@@ -2,6 +2,30 @@
 const prisma = require('../utils/db');
 const { asyncHandler, AppError } = require('../utils/errorHandler');
 
+function sellerMerchantData(seller, status) {
+  return {
+    name: seller.shopName || seller.email || 'Seller shop',
+    description: seller.shopDescription || null,
+    email: seller.email || null,
+    phone: seller.shopPhone || null,
+    address: seller.shopAddress || null,
+    status,
+  };
+}
+
+async function syncLegacyMerchant(tx, seller, status) {
+  const data = sellerMerchantData(seller, status);
+
+  await tx.merchant.upsert({
+    where: { id: seller.id },
+    update: data,
+    create: {
+      id: seller.id,
+      ...data,
+    },
+  });
+}
+
 // GET /api/admin/sellers
 const getAllSellers = asyncHandler(async (req, res) => {
   const sellers = await prisma.user.findMany({
@@ -47,6 +71,8 @@ const approveSeller = asyncHandler(async (req, res) => {
       select: { id: true, email: true, shopName: true, shopStatus: true, shopApprovedAt: true }
     });
 
+    await syncLegacyMerchant(tx, { ...seller, ...approvedSeller }, 'ACTIVE');
+
     // Notify seller
     await tx.notification.create({
       data: {
@@ -77,6 +103,8 @@ const suspendSeller = asyncHandler(async (req, res) => {
       data: { shopStatus: 'SUSPENDED' },
       select: { id: true, email: true, shopName: true, shopStatus: true }
     });
+
+    await syncLegacyMerchant(tx, { ...seller, ...suspendedSeller }, 'SUSPENDED');
 
     await tx.notification.create({
       data: {

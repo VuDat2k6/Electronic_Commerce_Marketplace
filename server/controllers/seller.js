@@ -49,6 +49,105 @@ async function verifySellerOwnership(req, resourceId, resourceType = 'resource')
   }
 }
 
+function requireWholeNumber(value, fieldName, minimum) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < minimum) {
+    const requirement = minimum === 1 ? 'a positive whole VND amount' : 'a non-negative whole number';
+    throw new AppError(`${fieldName} must be ${requirement}`, 400);
+  }
+  return parsed;
+}
+
+function normalizeSubOrderStatus(status) {
+  const normalized = String(status || '').trim().toUpperCase();
+  const aliases = {
+    PENDING: 'PENDING',
+    CONFIRMED: 'CONFIRMED',
+    PROCESSING: 'PROCESSING',
+    SHIPPED: 'SHIPPED',
+    DELIVERED: 'DELIVERED',
+    CANCELLED: 'CANCELLED',
+    CANCELED: 'CANCELLED',
+  };
+
+  return aliases[normalized];
+}
+
+function normalizeLegacyOrderStatus(status) {
+  const normalized = String(status || '').trim().toLowerCase();
+  const aliases = {
+    pending: 'processing',
+    confirmed: 'processing',
+    processing: 'processing',
+    shipped: 'processing',
+    delivered: 'delivered',
+    completed: 'delivered',
+    cancelled: 'canceled',
+    canceled: 'canceled',
+  };
+
+  return aliases[normalized];
+}
+
+function deriveParentOrderStatus(subOrderStatuses) {
+  if (!subOrderStatuses.length) return 'processing';
+
+  const normalizedStatuses = subOrderStatuses.map((status) => String(status || '').toUpperCase());
+  if (normalizedStatuses.every((status) => status === 'DELIVERED')) return 'delivered';
+  if (normalizedStatuses.every((status) => status === 'CANCELLED')) return 'canceled';
+
+  return 'processing';
+}
+
+async function createBuyerOrderUpdateNotification(order, status) {
+  if (!order?.buyerId) return;
+
+  await prisma.notification.create({
+    data: {
+      userId: order.buyerId,
+      title: 'Order updated',
+      message: `Order #${String(order.id).slice(0, 8)} status is now ${status}.`,
+      type: 'ORDER_UPDATE',
+      priority: 'NORMAL',
+      metadata: {
+        orderId: order.id,
+        status,
+      },
+    },
+  });
+}
+
+async function createAdminSellerApplicationNotifications(seller) {
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: ROLES.ADMIN },
+      select: { id: true },
+    });
+
+    if (admins.length === 0) return;
+
+    await prisma.notification.createMany({
+      data: admins.map((admin) => ({
+        userId: admin.id,
+        title: 'New seller application',
+        message: `${seller.shopName || 'A new shop'} (${seller.email}) submitted a seller application and is waiting for approval.`,
+        type: 'SYSTEM_ALERT',
+        priority: 'HIGH',
+        isRead: false,
+        metadata: {
+          sellerId: seller.id,
+          sellerEmail: seller.email,
+          shopName: seller.shopName,
+          shopStatus: seller.shopStatus,
+        },
+      })),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown notification error';
+    console.warn(`Failed to create admin seller-application notification for seller ${seller?.id}: ${message}`);
+  }
+}
+
 // ============================================================
 // SELLER CONTROLLER FUNCTIONS
 // ============================================================
@@ -71,10 +170,14 @@ const registerAsSeller = asyncHandler(async (req, res) => {
   if (user.role === ROLES.SELLER) throw new AppError('User is already a seller', 400);
   if (user.role === ROLES.ADMIN) throw new AppError('Admin cannot register as a seller', 400);
 
-  // Check if user already has a pending or active shop
+  // Note: Since Prisma schema sets shopStatus to 'PENDING' by default for all new buyers,
+  // checking user.shopStatus === 'PENDING' here incorrectly blocks new registrations.
+  // The user.role === ROLES.SELLER check above already correctly prevents double registration.
+  /*
   if (user.shopStatus === 'PENDING' || user.shopStatus === 'ACTIVE') {
     throw new AppError('You already have a seller account', 400);
   }
+  */
 
   const updatedUser = await prisma.user.update({
     where: { id: userId },
@@ -96,6 +199,8 @@ const registerAsSeller = asyncHandler(async (req, res) => {
       shopCreatedAt: true
     }
   });
+
+  await createAdminSellerApplicationNotifications(updatedUser);
 
   return res.status(201).json({
     message: 'Seller registration successful. Please wait for admin approval.',
@@ -120,45 +225,149 @@ const getSellerDashboard = asyncHandler(async (req, res) => {
     throw new AppError('Seller does not exist', 404);
   }
 
-  // Run all queries in parallel for better performance
-  const [
-    totalProducts,
-    totalOrderItems,
-    todayStart,
-    pendingItems
-  ] = await Promise.all([
+  const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfWeek = new Date(startOfToday);
+  const dayOffset = (startOfWeek.getDay() + 6) % 7;
+  startOfWeek.setDate(startOfWeek.getDate() - dayOffset);
+
+  const startOfPreviousWeek = new Date(startOfWeek);
+  startOfPreviousWeek.setDate(startOfPreviousWeek.getDate() - 7);
+
+  const isPendingStatus = (status) => {
+    const normalized = String(status || '').toUpperCase();
+    return normalized === 'PENDING' || normalized === 'PROCESSING';
+  };
+
+  const getChangePercent = (current, previous) => {
+    if (!previous) return null;
+    return Math.round(((current - previous) / previous) * 100);
+  };
+
+  const [totalProducts, legacyOrderItems, currentSubOrders] = await Promise.all([
     prisma.product.count({ where: { sellerId } }),
-    prisma.order_item.count({ where: { sellerId } }),
-    Promise.resolve(new Date().setHours(0, 0, 0, 0)),
-    prisma.order_item.count({ 
-      where: { 
-        sellerId,
-        order: { status: 'processing' }
-      }
-    })
+    prisma.order_item.findMany({
+      where: { sellerId },
+      include: {
+        order: {
+          select: {
+            id: true,
+            name: true,
+            lastname: true,
+            email: true,
+            status: true,
+            dateTime: true,
+          },
+        },
+      },
+      orderBy: { order: { dateTime: 'desc' } },
+    }),
+    prisma.subOrder.findMany({
+      where: { merchantId: sellerId },
+      include: {
+        parentOrder: {
+          select: {
+            id: true,
+            name: true,
+            lastname: true,
+            email: true,
+            dateTime: true,
+          },
+        },
+        products: {
+          select: {
+            quantity: true,
+            unitPriceSnapshot: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
   ]);
 
-  // Revenue aggregation using Prisma aggregate (not findMany + reduce)
-  const revenueResult = await prisma.order_item.aggregate({
-    where: { sellerId },
-    _sum: { priceAtPurchase: true }
-  });
-  const totalRevenue = revenueResult._sum.priceAtPurchase || 0;
+  const legacyOrderMap = new Map();
+  for (const item of legacyOrderItems) {
+    if (!item.order) continue;
 
-  // Today's orders
-  const todayOrders = await prisma.order_item.count({
-    where: {
-      sellerId,
-      order: { dateTime: { gte: new Date(todayStart) } }
-    }
+    const amount = item.priceAtPurchase * item.quantity;
+    const existing = legacyOrderMap.get(item.orderId) || {
+      id: item.orderId,
+      customer: [item.order.name, item.order.lastname].filter(Boolean).join(' ') || item.order.email || 'Customer',
+      items: 0,
+      total: 0,
+      status: item.order.status,
+      date: item.order.dateTime,
+    };
+
+    existing.items += item.quantity;
+    existing.total += amount;
+    legacyOrderMap.set(item.orderId, existing);
+  }
+
+  const legacyOrders = Array.from(legacyOrderMap.values());
+  const subOrders = currentSubOrders.map((subOrder) => {
+    const productsTotal = subOrder.products.reduce(
+      (sum, product) => sum + product.unitPriceSnapshot * product.quantity,
+      0
+    );
+
+    return {
+      id: subOrder.parentOrderId,
+      customer: [subOrder.parentOrder?.name, subOrder.parentOrder?.lastname].filter(Boolean).join(' ')
+        || subOrder.parentOrder?.email
+        || 'Customer',
+      items: subOrder.products.reduce((sum, product) => sum + product.quantity, 0),
+      total: subOrder.subTotal || productsTotal,
+      status: subOrder.status,
+      date: subOrder.parentOrder?.dateTime || subOrder.createdAt,
+    };
   });
+
+  const allOrders = [...legacyOrders, ...subOrders].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+
+  const totalOrderItems = allOrders.reduce((sum, order) => sum + order.items, 0);
+  const totalRevenue = allOrders.reduce((sum, order) => sum + order.total, 0);
+  const monthlyRevenue = allOrders
+    .filter((order) => new Date(order.date) >= startOfMonth)
+    .reduce((sum, order) => sum + order.total, 0);
+  const weeklyRevenue = allOrders
+    .filter((order) => new Date(order.date) >= startOfWeek)
+    .reduce((sum, order) => sum + order.total, 0);
+  const previousWeekRevenue = allOrders
+    .filter((order) => {
+      const orderDate = new Date(order.date);
+      return orderDate >= startOfPreviousWeek && orderDate < startOfWeek;
+    })
+    .reduce((sum, order) => sum + order.total, 0);
+  const todayOrders = allOrders.filter((order) => new Date(order.date) >= startOfToday).length;
+  const pendingItems = allOrders.filter((order) => isPendingStatus(order.status)).length;
 
   return res.json({
     totalProducts,
     totalOrderItems,
+    totalOrders: allOrders.length,
     totalRevenue,
+    monthlyRevenue,
+    weeklyRevenue,
+    weeklyRevenueChangePercent: getChangePercent(weeklyRevenue, previousWeekRevenue),
     todayOrderCount: todayOrders,
     pendingOrderCount: pendingItems,
+    recentOrders: allOrders.slice(0, 5).map((order) => ({
+      id: order.id,
+      displayId: `#${String(order.id).slice(0, 8).toUpperCase()}`,
+      customer: order.customer,
+      items: order.items,
+      total: order.total,
+      status: String(order.status || 'PENDING').toUpperCase(),
+      date: order.date,
+    })),
+    storeViewsLast7Days: 0,
+    storeViewsChangePercent: null,
   });
 });
 
@@ -205,6 +414,9 @@ const createSellerProduct = asyncHandler(async (req, res) => {
     throw new AppError('title, slug, price, and categoryId are required', 400);
   }
 
+  const validatedPrice = requireWholeNumber(price, 'price', 1);
+  const validatedStock = requireWholeNumber(inStock ?? 1, 'inStock', 0);
+
   // Verify the seller is valid and approved
   const seller = await prisma.user.findUnique({ where: { id: sellerId } });
   if (!seller || seller.role !== ROLES.SELLER) {
@@ -231,12 +443,12 @@ const createSellerProduct = asyncHandler(async (req, res) => {
       sellerId,
       title,
       slug,
-      price: parseInt(price),
+      price: validatedPrice,
       manufacturer: manufacturer || '',
       description: description || '',
       mainImage: mainImage || '',
       categoryId,
-      inStock: parseInt(inStock ?? 1),
+      inStock: validatedStock,
       rating: 5,
       status: 'PUBLISHED'
     }
@@ -262,6 +474,9 @@ const updateSellerProduct = asyncHandler(async (req, res) => {
   // IDOR protection: seller can only edit their own product
   await verifySellerOwnership(req, product.sellerId, 'product');
 
+  const validatedPrice = price !== undefined ? requireWholeNumber(price, 'price', 1) : undefined;
+  const validatedStock = inStock !== undefined ? requireWholeNumber(inStock, 'inStock', 0) : undefined;
+
   // Check slug uniqueness if changed
   if (slug && slug !== product.slug) {
     const existingSlug = await prisma.product.findFirst({ 
@@ -277,12 +492,12 @@ const updateSellerProduct = asyncHandler(async (req, res) => {
     data: {
       ...(title && { title }),
       ...(slug && { slug }),
-      ...(price !== undefined && { price: parseInt(price) }),
+      ...(price !== undefined && { price: validatedPrice }),
       ...(manufacturer !== undefined && { manufacturer }),
       ...(description !== undefined && { description }),
       ...(mainImage !== undefined && { mainImage }),
       ...(categoryId && { categoryId }),
-      ...(inStock !== undefined && { inStock: parseInt(inStock) })
+      ...(inStock !== undefined && { inStock: validatedStock })
     }
   });
 
@@ -305,19 +520,19 @@ const deleteSellerProduct = asyncHandler(async (req, res) => {
   // IDOR protection: seller can only delete their own product
   await verifySellerOwnership(req, product.sellerId, 'product');
 
-  // Check for related orders
-  const relatedItems = await prisma.order_item.findMany({ 
-    where: { productId: id },
-    take: 1
-  });
-  if (relatedItems.length > 0) {
-    // Instead of failing, archive the product
+  // Preserve product records referenced by either current or legacy order flow.
+  const [relatedItems, relatedSubOrderProducts] = await Promise.all([
+    prisma.order_item.count({ where: { productId: id } }),
+    prisma.subOrderProduct.count({ where: { productId: id } }),
+  ]);
+  if (relatedItems > 0 || relatedSubOrderProducts > 0) {
+    // Remove from sale without breaking order history or product snapshots.
     await prisma.product.update({
       where: { id },
-      data: { status: 'ARCHIVED' }
+      data: { status: 'ARCHIVED', inStock: 0 }
     });
     return res.json({ 
-      message: 'Product has existing orders and has been archived instead of deleted',
+      message: 'Product has existing orders and was removed from sale instead of permanently deleted',
       archived: true 
     });
   }
@@ -337,7 +552,7 @@ const getSellerOrders = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 20;
   const skip = (page - 1) * limit;
 
-  const [items, total] = await Promise.all([
+  const [legacyItems, currentSubOrders] = await Promise.all([
     prisma.order_item.findMany({
       where: { sellerId },
       include: {
@@ -364,19 +579,86 @@ const getSellerOrders = asyncHandler(async (req, res) => {
         }
       },
       orderBy: { order: { dateTime: 'desc' } },
-      skip,
-      take: limit,
     }),
-    prisma.order_item.count({ where: { sellerId } })
+    prisma.subOrder.findMany({
+      where: { merchantId: sellerId },
+      include: {
+        parentOrder: {
+          select: {
+            id: true,
+            buyerId: true,
+            name: true,
+            lastname: true,
+            email: true,
+            city: true,
+            country: true,
+            status: true,
+            dateTime: true,
+            total: true,
+          },
+        },
+        products: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                title: true,
+                mainImage: true,
+                slug: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
   ]);
 
+  const currentItems = currentSubOrders.flatMap((subOrder) =>
+    subOrder.products.map((productSnapshot) => ({
+      id: productSnapshot.id,
+      source: 'subOrderProduct',
+      subOrderId: subOrder.id,
+      quantity: productSnapshot.quantity,
+      priceAtPurchase: productSnapshot.unitPriceSnapshot,
+      product: {
+        id: productSnapshot.productId,
+        title: productSnapshot.productNameSnapshot || productSnapshot.product?.title || 'Product',
+        mainImage: productSnapshot.productImageSnapshot || productSnapshot.product?.mainImage || '',
+        slug: productSnapshot.product?.slug || '',
+      },
+      order: {
+        id: subOrder.parentOrder?.id,
+        name: subOrder.parentOrder?.name,
+        lastname: subOrder.parentOrder?.lastname,
+        email: subOrder.parentOrder?.email,
+        city: subOrder.parentOrder?.city,
+        country: subOrder.parentOrder?.country,
+        status: subOrder.status,
+        dateTime: subOrder.parentOrder?.dateTime || subOrder.createdAt,
+        total: subOrder.subTotal + subOrder.shippingTotal,
+      },
+    }))
+  );
+
+  const legacyOrderItems = legacyItems.map((item) => ({
+    ...item,
+    source: 'legacyOrderItem',
+  }));
+
+  const items = [...currentItems, ...legacyOrderItems].sort(
+    (a, b) => new Date(b.order?.dateTime || 0).getTime() - new Date(a.order?.dateTime || 0).getTime()
+  );
+
+  const pagedItems = items.slice(skip, skip + limit);
+
   return res.json({
-    items,
-    pagination: { 
-      page, 
-      limit, 
-      total, 
-      totalPages: Math.ceil(total / limit) 
+    items: pagedItems,
+    pagination: {
+      page,
+      limit,
+      total: items.length,
+      totalPages: Math.ceil(items.length / limit)
     }
   });
 });
@@ -391,17 +673,69 @@ const updateOrderItemStatus = asyncHandler(async (req, res) => {
   const { itemId } = req.params;
   const { status } = req.body;
 
-  const VALID_STATUSES = ['processing', 'delivered', 'canceled'];
-  if (!VALID_STATUSES.includes(status)) {
-    throw new AppError(`Invalid status. Allowed values: ${VALID_STATUSES.join(', ')}`, 400);
-  }
-
-  // Verify item exists and belongs to this seller
   const item = await prisma.order_item.findUnique({
     where: { id: itemId },
     include: { order: true }
   });
-  if (!item) throw new AppError('Order item does not exist', 404);
+
+  if (!item) {
+    const subOrderProduct = await prisma.subOrderProduct.findUnique({
+      where: { id: itemId },
+      include: {
+        subOrder: {
+          include: { parentOrder: true },
+        },
+      },
+    });
+
+    const subOrder = subOrderProduct?.subOrder || await prisma.subOrder.findUnique({
+      where: { id: itemId },
+      include: { parentOrder: true },
+    });
+
+    if (!subOrder) throw new AppError('Order item does not exist', 404);
+
+    const subOrderStatus = normalizeSubOrderStatus(status);
+    if (!subOrderStatus) {
+      throw new AppError('Invalid status. Allowed values: PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED', 400);
+    }
+
+    await verifySellerOwnership(req, subOrder.merchantId, 'sub-order');
+
+    const updateData = { status: subOrderStatus };
+    if (subOrderStatus === 'SHIPPED') updateData.shippedAt = new Date();
+    if (subOrderStatus === 'DELIVERED') updateData.deliveredAt = new Date();
+    if (subOrderStatus === 'CANCELLED') updateData.cancelledAt = new Date();
+
+    const updatedSubOrder = await prisma.subOrder.update({
+      where: { id: subOrder.id },
+      data: updateData,
+    });
+
+    const siblingSubOrders = await prisma.subOrder.findMany({
+      where: { parentOrderId: subOrder.parentOrderId },
+      select: { status: true },
+    });
+
+    const parentStatus = deriveParentOrderStatus(siblingSubOrders.map((sibling) => sibling.status));
+    const updatedOrder = await prisma.customer_order.update({
+      where: { id: subOrder.parentOrderId },
+      data: { status: parentStatus },
+    });
+
+    await createBuyerOrderUpdateNotification(updatedOrder, subOrderStatus);
+
+    return res.json({
+      message: 'Update successful',
+      subOrder: updatedSubOrder,
+      order: updatedOrder,
+    });
+  }
+
+  const legacyStatus = normalizeLegacyOrderStatus(status);
+  if (!legacyStatus) {
+    throw new AppError('Invalid status. Allowed values: processing, delivered, canceled', 400);
+  }
 
   // IDOR protection: seller can only update their own items
   await verifySellerOwnership(req, item.sellerId, 'order item');
@@ -420,21 +754,11 @@ const updateOrderItemStatus = asyncHandler(async (req, res) => {
   // Update status on Customer_order (entire order)
   const updatedOrder = await prisma.customer_order.update({
     where: { id: item.orderId },
-    data: { status }
+    data: { status: legacyStatus }
   });
 
   // Create notification for buyer
-  if (updatedOrder.buyerId) {
-    await prisma.notification.create({
-      data: {
-        userId: updatedOrder.buyerId,
-        title: 'Order updated',
-        message: `Order #${updatedOrder.id.slice(0, 8)} has been updated to: ${status}`,
-        type: 'ORDER_UPDATE',
-        priority: 'NORMAL',
-      }
-    });
-  }
+  await createBuyerOrderUpdateNotification(updatedOrder, legacyStatus);
 
   return res.json({ message: 'Update successful', order: updatedOrder });
 });

@@ -58,7 +58,7 @@ export const categoryMenuList = [
   },
   {
     id: 10,
-    title: "Head Phones",
+    title: "Headphones",
     src: "/headphone icon.png",
     href: "/shop/headphones"
   },

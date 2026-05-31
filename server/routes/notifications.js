@@ -3,9 +3,9 @@
  * 
  * Provides secure notification endpoints:
  * - GET /api/notifications/:userId - Authenticated (own notifications)
- * - POST /api/notifications - Authenticated (create notification)
- * - PUT /api/notifications/:id - Authenticated (update notification)
- * - DELETE /api/notifications/:id - Authenticated (delete notification)
+ * - POST /api/notifications - Admin only (create notification)
+ * - PUT /api/notifications/:id - Authenticated (update own notification)
+ * - DELETE /api/notifications/:id - Authenticated (delete own notification)
  * 
  * @module routes/notifications
  */
@@ -23,7 +23,7 @@ const {
   getUnreadCount
 } = require('../controllers/notificationController');
 
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireAdmin } = require('../middleware/auth');
 
 // ============================================================
 // AUTHENTICATED ROUTES
@@ -46,21 +46,21 @@ router.get('/:userId', authenticate, getUserNotifications);
 /**
  * POST /api/notifications
  * Create new notification (internal use, typically from other services)
- * Authenticated
+ * Admin only
  */
-router.post('/', authenticate, createNotification);
+router.post('/', authenticate, requireAdmin, createNotification);
 
 /**
  * POST /api/notifications/mark-read
  * Bulk mark notifications as read
- * Authenticated user
+ * Authenticated user (own notifications)
  */
 router.post('/mark-read', authenticate, bulkMarkAsRead);
 
 /**
  * DELETE /api/notifications/bulk
  * Bulk delete notifications
- * Authenticated user
+ * Authenticated user (own notifications)
  */
 router.delete('/bulk', authenticate, bulkDeleteNotifications);
 

@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import apiClient from "@/lib/api";
 import toast from "react-hot-toast";
@@ -37,6 +37,15 @@ const formatDate = (dateStr: string) => {
   });
 };
 
+async function readApiError(res: Response, fallback: string) {
+  try {
+    const err = await res.json();
+    return err.message || err.error || err.details || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function SellerVouchersPage() {
   const { data: session, status } = useSession();
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
@@ -56,13 +65,15 @@ export default function SellerVouchersPage() {
   });
   const [saving, setSaving] = useState(false);
 
-  const fetchVouchers = async () => {
-    if (!session?.user?.id) {
+  const userId = (session?.user as any)?.id;
+
+  const fetchVouchers = useCallback(async () => {
+    if (!userId) {
       setLoading(false);
       return;
     }
     try {
-      const res = await apiClient.get(`/api/seller/vouchers?sellerId=${session.user.id}`);
+      const res = await apiClient.get(`/api/seller/vouchers?sellerId=${userId}`);
       const data = await res.json();
       setVouchers(Array.isArray(data) ? data : []);
     } catch {
@@ -70,7 +81,7 @@ export default function SellerVouchersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -78,7 +89,7 @@ export default function SellerVouchersPage() {
     } else if (status === "unauthenticated") {
       setLoading(false);
     }
-  }, [status, session?.user?.id]);
+  }, [status, fetchVouchers]);
 
   const resetForm = () => {
     setForm({
@@ -115,7 +126,7 @@ export default function SellerVouchersPage() {
     setSaving(true);
     try {
       const payload = {
-        sellerId: session?.user?.id,
+        sellerId: (session?.user as any)?.id,
         ...form,
         discountValue: parseInt(form.discountValue),
         minOrderValue: form.minOrderValue ? parseInt(form.minOrderValue) : null,
@@ -143,8 +154,7 @@ export default function SellerVouchersPage() {
         resetForm();
         fetchVouchers();
       } else {
-        const err = await res.json();
-        toast.error(err.message || "Error while saving");
+        toast.error(await readApiError(res, "Error while saving"));
       }
     } catch {
       toast.error("Connection error");
@@ -158,15 +168,14 @@ export default function SellerVouchersPage() {
     try {
       const res = await apiClient.request(`/api/seller/vouchers/${id}`, {
         method: "DELETE",
-        body: JSON.stringify({ sellerId: session?.user?.id }),
+        body: JSON.stringify({ sellerId: (session?.user as any)?.id }),
         headers: { "Content-Type": "application/json" }
       } as any);
       if (res.status === 204) {
         toast.success("Voucher deleted successfully");
         fetchVouchers();
       } else {
-        const err = await res.json();
-        toast.error(err.message || "Unable to delete");
+        toast.error(await readApiError(res, "Unable to delete"));
       }
     } catch {
       toast.error("Error while deleting");
@@ -177,7 +186,7 @@ export default function SellerVouchersPage() {
     try {
       const res = await apiClient.request(`/api/seller/vouchers/${voucher.id}`, {
         method: "PUT",
-        body: JSON.stringify({ sellerId: session?.user?.id, isActive: !voucher.isActive }),
+        body: JSON.stringify({ sellerId: (session?.user as any)?.id, isActive: !voucher.isActive }),
         headers: { "Content-Type": "application/json" }
       } as any);
       if (res.ok) {

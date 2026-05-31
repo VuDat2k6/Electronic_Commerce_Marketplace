@@ -1,3 +1,4 @@
+"use client";
 // *********************
 // Role of the component: Section title that can be used on any page
 // Name of the component: SectionTitle.tsx
@@ -14,11 +15,13 @@ import { motion } from 'framer-motion';
 import { Home } from 'lucide-react';
 
 const SectionTitle = ({ title, path }: { title: string; path: string }) => {
-  const pathParts = path.split(' | ').map((part, index, arr) => {
-    const isLast = index === arr.length - 1;
-    const href = part === 'Home' ? '/' : `/${part.toLowerCase().replace(/\s+/g, '-')}`;
-    return { name: part, href, isLast };
-  });
+  const pathParts = path.split(' | ')
+    .filter((part) => part.toLowerCase() !== 'home')
+    .map((part, index, arr) => {
+      const isLast = index === arr.length - 1;
+      const href = `/${part.toLowerCase().replace(/\s+/g, '-')}`;
+      return { name: part, href, isLast };
+    });
 
   return (
     <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 pt-20 pb-16 relative overflow-hidden">

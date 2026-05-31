@@ -1,14 +1,14 @@
 // Page Transition Component - Wraps page content with smooth animations
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, Variants } from "framer-motion";
 import { usePathname } from "next/navigation";
 
 interface PageTransitionProps {
   children: React.ReactNode;
 }
 
-const pageVariants = {
+const pageVariants: Variants = {
   initial: {
     opacity: 0,
     y: 20,
@@ -129,7 +129,7 @@ export function StaggerContainer({
   staggerDelay = 0.1,
   className = "",
 }: StaggerContainerProps) {
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -167,7 +167,7 @@ interface StaggerItemProps {
  * @returns A motion.div that applies the staggered enter animation to `children`
  */
 export function StaggerItem({ children, className = "" }: StaggerItemProps) {
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { opacity: 0, y: 20 },
     visible: {
       opacity: 1,

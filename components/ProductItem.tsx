@@ -3,12 +3,14 @@
 
 import { Star, ShoppingCart, Heart, X, Plus, Minus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useProductStore } from '@/app/_zustand/store';
 import { useWishlistStore } from '@/app/_zustand/wishlistStore';
+import { useSession } from 'next-auth/react';
 
 interface Product {
   id: string;
@@ -41,10 +43,18 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
   const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [isInteractive, setIsInteractive] = useState(false);
 
   // Store connections
   const { addToCart } = useProductStore();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlistStore();
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const actionsDisabled = !isInteractive || status === 'loading';
+
+  useEffect(() => {
+    setIsInteractive(true);
+  }, []);
 
   // Check if product is in wishlist
   const isWishlisted = isInWishlist(product.id);
@@ -69,6 +79,12 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
     e.preventDefault();
     e.stopPropagation();
 
+    if (!session?.user) {
+      toast.error('Please login to add to cart');
+      router.push(`/login?callbackUrl=${encodeURIComponent(`/product/${product.slug}`)}`);
+      return;
+    }
+
     addToCart({
       id: product.id,
       title: product.title,
@@ -77,6 +93,7 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
       slug: product.slug,
       amount: 1,
       sellerId: product.sellerId || product.merchantId,
+      sellerName: product.seller?.shopName || product.merchant?.name,
     });
 
     toast.success(`${product.title} added to cart!`, {
@@ -89,12 +106,18 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
         padding: '12px 16px',
       },
     });
-  }, [product, addToCart]);
+  }, [product, addToCart, router, session?.user]);
 
   // Handle wishlist toggle
   const handleWishlist = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if (!session?.user) {
+      toast.error('Please login to add to wishlist');
+      router.push(`/login?callbackUrl=${encodeURIComponent(`/product/${product.slug}`)}`);
+      return;
+    }
 
     if (isWishlisted) {
       removeFromWishlist(product.id);
@@ -109,6 +132,8 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
         price: product.price,
         image: product.mainImage,
         slug: product.slug,
+        sellerId: product.sellerId || product.merchantId,
+        sellerName: product.seller?.shopName || product.merchant?.name,
       });
       toast.success(`${product.title} added to wishlist!`, {
         duration: 2000,
@@ -121,7 +146,7 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
         },
       });
     }
-  }, [product, isWishlisted, addToWishlist, removeFromWishlist]);
+  }, [product, isWishlisted, addToWishlist, removeFromWishlist, router, session?.user]);
 
   // Handle quick view
   const handleQuickView = useCallback((e: React.MouseEvent) => {
@@ -195,9 +220,10 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
 
             {/* Wishlist button */}
             <motion.button
+              disabled={actionsDisabled}
               className={`absolute top-3 right-3 bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg z-10 transition-all duration-200 ${
                 discount > 0 || showHotBadge || showNewBadge ? 'top-16' : ''
-              } ${isWishlisted ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+              } ${isWishlisted ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} disabled:cursor-wait`}
               whileHover={{ scale: 1.2 }}
               whileTap={{ scale: 0.9 }}
               onClick={handleWishlist}
@@ -217,7 +243,8 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
               className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center z-20"
             >
               <motion.button
-                className="bg-white text-gray-900 px-6 py-2 rounded-full font-semibold shadow-xl"
+                disabled={actionsDisabled}
+                className="bg-white text-gray-900 px-6 py-2 rounded-full font-semibold shadow-xl disabled:cursor-wait disabled:opacity-60"
                 initial={{ scale: 0 }}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -279,7 +306,8 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
 
           {/* Add to cart button */}
           <motion.button
-            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 rounded-xl flex items-center justify-center gap-2 font-semibold shadow-lg transition-all duration-300"
+            disabled={actionsDisabled}
+            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 rounded-xl flex items-center justify-center gap-2 font-semibold shadow-lg transition-all duration-300 disabled:cursor-wait disabled:opacity-60"
             whileHover={{ scale: 1.02, boxShadow: "0 10px 30px rgba(147, 51, 234, 0.3)" }}
             whileTap={{ scale: 0.98 }}
             onClick={handleAddToCart}
@@ -428,10 +456,16 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
                   {/* Action buttons */}
                   <div className="flex gap-3 mt-auto">
                     <motion.button
-                      className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 rounded-xl flex items-center justify-center gap-2 font-semibold shadow-lg"
+                      disabled={actionsDisabled}
+                      className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 rounded-xl flex items-center justify-center gap-2 font-semibold shadow-lg disabled:cursor-wait disabled:opacity-60"
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => {
+                        if (!session?.user) {
+                          toast.error('Please login to add to cart');
+                          router.push(`/login?callbackUrl=${encodeURIComponent(`/product/${product.slug}`)}`);
+                          return;
+                        }
                         for (let i = 0; i < quantity; i++) {
                           addToCart({
                             id: product.id,
@@ -441,6 +475,7 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
                             slug: product.slug,
                             amount: 1,
                             sellerId: product.sellerId || product.merchantId,
+                            sellerName: product.seller?.shopName || product.merchant?.name,
                           });
                         }
                         toast.success(`${quantity}x ${product.title} added to cart!`, {
@@ -455,11 +490,12 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
                     </motion.button>
 
                     <motion.button
+                      disabled={actionsDisabled}
                       className={`p-3 rounded-xl border-2 transition-all ${
                         isWishlisted
                           ? 'border-red-500 bg-red-50 text-red-500'
                           : 'border-gray-300 hover:border-red-500 hover:bg-red-50'
-                      }`}
+                      } disabled:cursor-wait disabled:opacity-60`}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={handleWishlist}

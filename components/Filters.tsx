@@ -13,9 +13,7 @@ import React, { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useSortStore } from "@/app/_zustand/sortStore";
-import { usePaginationStore } from "@/app/_zustand/paginationStore";
-import { motion } from "framer-motion";
-import { Filter, Star } from "lucide-react";
+import { Star, RotateCcw, SlidersHorizontal } from "lucide-react";
 
 interface InputCategory {
   inStock: { text: string, isChecked: boolean },
@@ -24,32 +22,58 @@ interface InputCategory {
   ratingFilter: { text: string, value: number },
 }
 
-const Filters = () => {
+const Filters = ({ onApplied }: { onApplied?: () => void }) => {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { replace } = useRouter();
-
-  // getting current page number from Zustand store
-  const { page } = usePaginationStore();
 
   const [inputCategory, setInputCategory] = useState<InputCategory>({
     inStock: { text: "instock", isChecked: true },
     outOfStock: { text: "outofstock", isChecked: true },
-    priceFilter: { text: "price", value: 30000000 },
+    priceFilter: { text: "price", value: 80000000 },
     ratingFilter: { text: "rating", value: 0 },
   });
+  const [isInteractive, setIsInteractive] = useState(false);
   const { sortBy } = useSortStore();
 
   useEffect(() => {
+    setIsInteractive(true);
+  }, []);
+
+  useEffect(() => {
+    const price = Number(searchParams.get("price"));
+    const rating = Number(searchParams.get("rating"));
+
+    setInputCategory({
+      inStock: { text: "instock", isChecked: searchParams.get("inStock") !== "false" },
+      outOfStock: { text: "outofstock", isChecked: searchParams.get("outOfStock") !== "false" },
+      priceFilter: { text: "price", value: Number.isFinite(price) && price > 0 ? price : 80000000 },
+      ratingFilter: { text: "rating", value: Number.isFinite(rating) ? rating : 0 },
+    });
+  }, [searchParams]);
+
+  const applyFilters = () => {
     const params = new URLSearchParams();
-    // setting URL params and after that putting them all in URL
     params.set("outOfStock", inputCategory.outOfStock.isChecked.toString());
     params.set("inStock", inputCategory.inStock.isChecked.toString());
     params.set("rating", inputCategory.ratingFilter.value.toString());
     params.set("price", inputCategory.priceFilter.value.toString());
     params.set("sort", sortBy);
-    params.set("page", page.toString());
+    params.set("page", "1");
     replace(`${pathname}?${params}`);
-  }, [inputCategory, sortBy, page]);
+    onApplied?.();
+  };
+
+  const resetFilters = () => {
+    setInputCategory({
+      inStock: { text: "instock", isChecked: true },
+      outOfStock: { text: "outofstock", isChecked: true },
+      priceFilter: { text: "price", value: 80000000 },
+      ratingFilter: { text: "rating", value: 0 },
+    });
+    replace(`${pathname}?outOfStock=true&inStock=true&rating=0&price=80000000&sort=${sortBy}&page=1`);
+    onApplied?.();
+  };
 
   const formatPrice = (value: number) => {
     if (value >= 1000000) {
@@ -59,14 +83,12 @@ const Filters = () => {
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-          <Filter className="w-5 h-5 text-white" />
-        </div>
-        <h3 className="text-xl font-bold text-gray-900">Filters</h3>
-      </div>
-
+    <fieldset
+      disabled={!isInteractive}
+      className={`m-0 min-w-0 space-y-6 border-0 p-0 transition-opacity ${
+        isInteractive ? "" : "pointer-events-none opacity-60"
+      }`}
+    >
       {/* Availability Section */}
       <div className="mb-6">
         <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">Availability</h4>
@@ -145,8 +167,8 @@ const Filters = () => {
           <input
             type="range"
             min={0}
-            max={30000000}
-            step={500000}
+            max={80000000}
+            step={1000000}
             value={inputCategory.priceFilter.value}
             className="range range-sm range-primary w-full"
             onChange={(e) =>
@@ -162,7 +184,7 @@ const Filters = () => {
           <div className="flex justify-between items-center">
             <span className="text-sm text-gray-500">0</span>
             <span className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-semibold rounded-full">
-              Max: {formatPrice(inputCategory.priceFilter.value)}₫
+              Max: {formatPrice(inputCategory.priceFilter.value)} VND
             </span>
           </div>
         </div>
@@ -206,7 +228,26 @@ const Filters = () => {
           </span>
         </div>
       </div>
-    </div>
+
+      <div className="pt-5 border-t border-gray-100 grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={resetFilters}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+        >
+          <RotateCcw className="h-4 w-4" />
+          Reset
+        </button>
+        <button
+          type="button"
+          onClick={applyFilters}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 px-4 py-3 text-sm font-semibold text-white shadow-md hover:shadow-lg"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          Apply
+        </button>
+      </div>
+    </fieldset>
   );
 };
 

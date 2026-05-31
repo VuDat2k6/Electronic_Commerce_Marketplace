@@ -13,6 +13,7 @@
 
 const path = require("path");
 const fs = require("fs");
+const prisma = require("../utils/db");
 
 // ============================================================
 // CONFIGURATION
@@ -242,6 +243,22 @@ async function deleteMainImage(req, res) {
 
     const uploadDir = getUploadsDir();
     const filePath = path.join(uploadDir, filename);
+    const linkedOtherSellerProduct = await prisma.product.findFirst({
+      where: {
+        mainImage: {
+          in: [filename, `uploads/${filename}`, `/uploads/${filename}`]
+        },
+        sellerId: { not: req.user.id }
+      },
+      select: { id: true }
+    });
+
+    if (linkedOtherSellerProduct) {
+      return res.status(403).json({
+        error: "You can only delete images assigned to your own products",
+        code: "FORBIDDEN"
+      });
+    }
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {

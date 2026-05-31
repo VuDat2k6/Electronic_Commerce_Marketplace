@@ -1,3 +1,13 @@
+const apiOrigin = (() => {
+    try {
+        return process.env.NEXT_PUBLIC_API_BASE_URL
+            ? new URL(process.env.NEXT_PUBLIC_API_BASE_URL).origin
+            : "";
+    } catch {
+        return "";
+    }
+})();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     typescript: {
@@ -83,7 +93,7 @@ const nextConfig = {
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
                 "font-src 'self' https://fonts.gstatic.com",
                 "img-src 'self' data: blob: https:",
-                "connect-src 'self'",
+                `connect-src 'self'${apiOrigin ? ` ${apiOrigin}` : ""}`,
                 "frame-ancestors 'none'",
                 "form-action 'self'",
                 "base-uri 'self'",
@@ -106,7 +116,7 @@ const nextConfig = {
           headers: [
             {
               key: 'Cache-Control',
-              value: 'public, s-maxage=60, stale-while-revalidate=300',
+              value: 'no-store, must-revalidate',
             },
           ],
         },

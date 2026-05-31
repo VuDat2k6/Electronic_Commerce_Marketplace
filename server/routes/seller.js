@@ -37,7 +37,7 @@ const {
   updateSellerSettings,
 } = require('../controllers/seller');
 
-const { authenticate, requireSellerOrAdmin } = require('../middleware/auth');
+const { authenticate, requireSellerOrAdmin, requireSeller, requireActiveSeller } = require('../middleware/auth');
 
 // ============================================================
 // SELLER REGISTRATION (authenticated user becomes seller)
@@ -59,7 +59,7 @@ router.post('/register', authenticate, registerAsSeller);
  * Get seller dashboard statistics
  * Authenticated seller only - uses sellerId from JWT token
  */
-router.get('/dashboard', authenticate, requireSellerOrAdmin, getSellerDashboard);
+router.get('/dashboard', authenticate, requireSellerOrAdmin, requireActiveSeller, getSellerDashboard);
 
 // ============================================================
 // SELLER PRODUCTS (authenticated seller only)
@@ -70,28 +70,28 @@ router.get('/dashboard', authenticate, requireSellerOrAdmin, getSellerDashboard)
  * Get seller's own products
  * Authenticated seller only - uses sellerId from JWT token
  */
-router.get('/products', authenticate, requireSellerOrAdmin, getSellerProducts);
+router.get('/products', authenticate, requireSeller, requireActiveSeller, getSellerProducts);
 
 /**
  * POST /api/seller/products
  * Create a new product for the seller
  * Authenticated seller only - uses sellerId from JWT token
  */
-router.post('/products', authenticate, requireSellerOrAdmin, createSellerProduct);
+router.post('/products', authenticate, requireSeller, requireActiveSeller, createSellerProduct);
 
 /**
  * PUT /api/seller/products/:id
  * Update seller's own product
  * Authenticated seller only - verifies product belongs to seller
  */
-router.put('/products/:id', authenticate, requireSellerOrAdmin, updateSellerProduct);
+router.put('/products/:id', authenticate, requireSeller, requireActiveSeller, updateSellerProduct);
 
 /**
  * DELETE /api/seller/products/:id
  * Delete seller's own product
  * Authenticated seller only - verifies product belongs to seller
  */
-router.delete('/products/:id', authenticate, requireSellerOrAdmin, deleteSellerProduct);
+router.delete('/products/:id', authenticate, requireSeller, requireActiveSeller, deleteSellerProduct);
 
 // ============================================================
 // SELLER ORDERS (authenticated seller only)
@@ -102,14 +102,14 @@ router.delete('/products/:id', authenticate, requireSellerOrAdmin, deleteSellerP
  * Get seller's own orders
  * Authenticated seller only - uses sellerId from JWT token
  */
-router.get('/orders', authenticate, requireSellerOrAdmin, getSellerOrders);
+router.get('/orders', authenticate, requireSellerOrAdmin, requireActiveSeller, getSellerOrders);
 
 /**
  * PATCH /api/seller/orders/:itemId/status
  * Update order item status
  * Authenticated seller only - verifies item belongs to seller
  */
-router.patch('/orders/:itemId/status', authenticate, requireSellerOrAdmin, updateOrderItemStatus);
+router.patch('/orders/:itemId/status', authenticate, requireSellerOrAdmin, requireActiveSeller, updateOrderItemStatus);
 
 // ============================================================
 // SELLER SETTINGS (authenticated seller only)
@@ -120,13 +120,13 @@ router.patch('/orders/:itemId/status', authenticate, requireSellerOrAdmin, updat
  * Get seller's shop settings
  * Authenticated seller only - uses sellerId from JWT token
  */
-router.get('/settings', authenticate, requireSellerOrAdmin, getSellerSettings);
+router.get('/settings', authenticate, requireSellerOrAdmin, requireActiveSeller, getSellerSettings);
 
 /**
  * PUT /api/seller/settings
  * Update seller's shop settings
  * Authenticated seller only - uses sellerId from JWT token
  */
-router.put('/settings', authenticate, requireSellerOrAdmin, updateSellerSettings);
+router.put('/settings', authenticate, requireSellerOrAdmin, requireActiveSeller, updateSellerSettings);
 
 module.exports = router;

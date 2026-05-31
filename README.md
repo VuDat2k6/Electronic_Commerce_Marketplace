@@ -1,423 +1,299 @@
-# TFDTRONIC Electronics eCommerce Marketplace
+# TFDTRONIC Electronics Marketplace
 
-A modern, full-stack electronics e-commerce platform built with **Next.js 15**, **Node.js**, **Express**, and **MySQL**. The platform features a clean, responsive storefront for customers, a powerful admin dashboard for store management, and a dedicated seller dashboard for vendors to manage their own stores.
-
----
+TFDTRONIC is a full-stack electronics marketplace built with Next.js, Express, Prisma, MySQL, NextAuth, and Zustand. It supports a customer storefront, buyer checkout, seller dashboards, admin moderation, notifications, vouchers, reviews, and multi-seller order handling.
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Frontend Framework | Next.js 15 (App Router) |
-| UI Library | React 18 |
-| Styling | Tailwind CSS, Flowbite React |
-| Backend Framework | Node.js, Express |
-| Database | MySQL with Prisma ORM |
-| Authentication | NextAuth.js (Credentials, Google, GitHub OAuth) |
-| State Management | Zustand |
-| Icons | React Icons |
-| Charts | ApexCharts |
+| Area | Stack |
+| --- | --- |
+| Frontend | Next.js 15 App Router, React 18, TypeScript |
+| Styling | Tailwind CSS, Flowbite React, Framer Motion |
+| Backend | Node.js, Express |
+| Database | MySQL, Prisma ORM |
+| Auth | NextAuth credentials flow with backend JWT bridge |
+| State | Zustand |
+| Testing | Playwright, TypeScript checks |
 
----
+## Current Feature Set
 
-## Features
+### Buyer storefront
 
-### Customer Storefront
+- Electronics-focused homepage with hero slider, featured products, categories, and product sections.
+- Product listing with search, sort, pagination, desktop filters, and mobile filters.
+- Product detail with product information, stock state, add-to-cart, buy-now, description, and reviews.
+- Cart and checkout with multi-seller grouping.
+- Voucher entry during checkout.
+- Order history under `My orders`.
+- Wishlist and notifications.
+- Buyer-to-seller application flow through `Become a seller`.
 
-- **Home Page** — Hero banners, featured products, category browsing
-- **Product Catalog** — Grid view with filtering, sorting, pagination
-- **Product Details** — Full product info, images, specifications, reviews
-- **Search** — Real-time search with filters
-- **Shopping Cart** — Multi-seller grouping, quantity adjustment, price calculation (stored in Zustand + sessionStorage)
-- **Wishlist** — Save favorite products for later
-- **Checkout** — Multi-step checkout with order summary
-- **My Orders** — Order history with status tracking
-- **Notifications** — Real-time notifications for order updates
-- **Authentication** — Register, login with NextAuth.js (Credentials, Google, GitHub)
+### Seller dashboard
 
-### Admin Dashboard (`/admin`)
+- Seller dashboard with real product, order, pending order, and revenue metrics.
+- Product management for seller-owned listings.
+- Seller order management.
+- Seller analytics with revenue/order summaries.
+- Voucher creation and management.
+- Bulk upload for seller product CSV imports.
+- Seller status page for pending or suspended sellers.
 
-- **Dashboard Overview** — Sales statistics, revenue charts, recent orders
-- **Product Management** — Full CRUD, image upload, inventory tracking
-- **Category Management** — Create/edit/delete categories
-- **Order Management** — View orders, update status, track shipments
-- **User Management** — Customer accounts, order history
-- **Bulk Upload** — Import products via CSV
-- **Merchant Management** — Approve/manage sellers
+### Admin dashboard
 
-### Seller Dashboard (`/seller`)
+- Platform dashboard and analytics.
+- User management.
+- Seller application review and seller suspension.
+- Category management.
+- Product moderation list and compliance warning flow.
+- Order oversight.
+- Platform settings route.
 
-- **Dashboard Overview** — Store statistics (total products, orders, revenue)
-- **Analytics** — Sales trends, 30-day revenue charts, hot products
-- **My Products** — CRUD product management
-- **Orders** — Manage sub-orders, update order status, add tracking info
-- **Vouchers** — Create discount codes (percentage or fixed amount)
-- **Bulk Upload** — Import products via CSV
-- **Settings** — Shop profile (name, description, phone, address)
+Admin product moderation is intentionally warning-based. Product removal is handled by sellers so active buyer order flows are not broken by direct admin deletion.
 
-### Multi-Vendor Architecture
+## Requirements
 
-- Each order is split into **sub-orders** per seller
-- Sellers manage only their own products and sub-orders
-- Customers can order from multiple sellers in a single checkout
-- Automatic shipping fee calculation per seller
+- Node.js 18 or newer
+- npm
+- MySQL 8 or compatible MySQL server
 
----
+## Environment
 
-## Getting Started
-
-### Prerequisites
-
-- **Node.js** v18.0 or higher
-- **npm** package manager
-- **MySQL Server** v8.0 or higher
-
-### Installation
-
-#### 1. Clone & Install Dependencies
-
-```bash
-git clone <repository-url>
-cd marketplace
-npm install
-```
-
-#### 2. Configure Environment Variables
-
-Create a `.env` file in the **root directory**:
+Create a root `.env` file:
 
 ```env
-# Frontend / NextAuth
-NEXT_PUBLIC_API_BASE_URL=http://localhost:3001
-NEXTAUTH_SECRET=your-secret-key-here
+NEXT_PUBLIC_API_BASE_URL=http://localhost:5000
+NODE_ENV=development
+DATABASE_URL="mysql://root:YOUR_PASSWORD@localhost:3306/marketplace"
+NEXTAUTH_SECRET=replace_with_a_long_random_secret
 NEXTAUTH_URL=http://localhost:3000
-
-# Database
-DATABASE_URL="mysql://username:password@localhost:3306/marketplace?sslmode=disabled"
-
-# OAuth (optional)
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GITHUB_ID=
-GITHUB_SECRET=
 ```
 
-Create a `.env` file in the **server directory**:
+Create `server/.env`:
 
 ```env
 NODE_ENV=development
-DATABASE_URL="mysql://username:password@localhost:3306/marketplace?sslmode=disabled"
-PORT=3001
+DATABASE_URL="mysql://root:YOUR_PASSWORD@localhost:3306/marketplace"
+NEXTAUTH_SECRET=replace_with_the_same_value_as_root_NEXTAUTH_SECRET
+PORT=5000
 ```
 
-#### 3. Setup Database
+Do not commit real `.env` files.
+
+## Installation
+
+Install frontend dependencies:
+
+```bash
+npm install
+```
+
+Install backend dependencies:
+
+```bash
+cd server
+npm install
+cd ..
+```
+
+## Database Setup
+
+Create the database:
 
 ```sql
 CREATE DATABASE marketplace;
 ```
 
+Generate Prisma client and push the schema:
+
 ```bash
-# Frontend Prisma
-npx prisma migrate dev --name init
-
-# Backend Prisma
-cd server
-npx prisma migrate dev --name init
-
-# Seed data
-node prisma/seed.js
+npm run db:generate
+npm run db:push
 ```
 
-#### 4. Start the Application
+Seed realistic electronics marketplace data:
 
-**Terminal 1 — Backend:**
 ```bash
-cd server
-node app.js
-# Server running on port 3001
+npm run db:seed
 ```
 
-**Terminal 2 — Frontend:**
-```bash
-npm run dev
-# Frontend running on port 3000
-```
+The seed includes:
 
-#### 5. Access
+- 1 admin
+- 5 active sellers
+- 1 pending seller
+- at least 5 buyers
+- one buyer account for testing `Become a seller`
+- electronics categories
+- at least 10 products per active seller
+- sample orders, reviews, vouchers, notifications, and dashboard data
 
-| URL | Description |
-|-----|-------------|
-| http://localhost:3000 | Customer Storefront |
-| http://localhost:3000/admin | Admin Dashboard |
-| http://localhost:3000/seller | Seller Dashboard |
-
-### Default Credentials
+## Seed Accounts
 
 | Role | Email | Password |
-|------|-------|----------|
-| Admin | mrzayquazaboy@gmail.com | admin123 |
-| Seller | (create via registration) | — |
+| --- | --- | --- |
+| Admin | `admin@tfdtronic.com` | `admin123` |
+| Active seller | `seller@tfdtronic.com` | `seller123` |
+| Other sellers | `gadget.seller@tfdtronic.com` | `password` |
+| Other sellers | `mobile.seller@tfdtronic.com` | `password` |
+| Other sellers | `gaming.seller@tfdtronic.com` | `password` |
+| Other sellers | `camera.seller@tfdtronic.com` | `password` |
+| Pending seller | `pending.seller@tfdtronic.com` | `password` |
+| Buyer | `buyer@tfdtronic.com` | `buyer123` |
+| Become-seller test buyer | `become.seller.test@tfdtronic.com` | `password` |
 
-> **Important:** Change these credentials in production.
+Change all seeded credentials before using a public or production database.
 
----
+## Run Locally
+
+Terminal 1, backend:
+
+```bash
+cd server
+npm start
+```
+
+Backend health check:
+
+```text
+http://localhost:5000/health
+```
+
+Terminal 2, frontend:
+
+```bash
+npm run dev
+```
+
+Frontend:
+
+```text
+http://localhost:3000
+```
+
+Useful routes:
+
+| Route | Purpose |
+| --- | --- |
+| `/` | Storefront homepage |
+| `/shop` | Product listing |
+| `/cart` | Cart |
+| `/checkout` | Checkout |
+| `/account/orders` | Buyer orders |
+| `/notifications` | Notifications |
+| `/become-seller` | Seller application |
+| `/seller/dashboard` | Seller dashboard |
+| `/seller/status` | Seller approval/suspension status |
+| `/admin` | Admin dashboard |
+
+## Testing and Verification
+
+Type check:
+
+```bash
+npx tsc --noEmit --pretty false
+```
+
+Production build:
+
+```bash
+npm run build
+```
+
+Playwright smoke examples:
+
+```bash
+npx playwright test e2e/auth.spec.ts --project=chromium --reporter=line
+npx playwright test e2e/marketplace.spec.ts --project=chromium --reporter=line
+npx playwright test e2e/seller-analytics.spec.ts --project=chromium --reporter=line
+```
+
+Run the broader E2E suite:
+
+```bash
+npx playwright test --project=chromium
+```
+
+Playwright outputs are ignored by Git:
+
+- `playwright-report/`
+- `test-results/`
+- `test-evidence/`
+
+On Windows, if `npm run build` fails with a Prisma `EPERM rename query_engine-windows.dll.node` error, stop the running Next.js/backend Node processes and run the build again. This is a file lock issue, not a schema issue.
 
 ## Project Structure
 
-```
+```text
 marketplace/
-├── app/                              # Next.js App Router (Frontend)
-│   ├── (auth)/                      # Auth pages (login, register)
-│   ├── (main)/                      # Main storefront pages
-│   │   ├── product/[slug]/          # Product detail page
-│   │   ├── shop/                    # Shop / category page
-│   │   ├── cart/                    # Shopping cart
-│   │   ├── checkout/                # Checkout page
-│   │   ├── search/                  # Search page
-│   │   └── wishlist/               # Wishlist page
-│   ├── (dashboard)/admin/           # Admin dashboard group
-│   │   ├── products/               # Admin product management
-│   │   ├── categories/             # Admin category management
-│   │   ├── orders/                 # Admin order management
-│   │   ├── users/                 # Admin user management
-│   │   ├── merchants/             # Admin merchant management
-│   │   └── bulk-upload/          # Admin bulk upload
-│   ├── (seller)/seller/            # Seller dashboard group (role=seller)
-│   │   ├── dashboard/            # Dashboard & statistics
-│   │   ├── analytics/            # Sales analytics & charts
-│   │   ├── products/            # Seller product management
-│   │   ├── orders/              # Seller sub-orders
-│   │   ├── vouchers/            # Seller vouchers
-│   │   ├── bulk-upload/         # Seller bulk upload
-│   │   └── settings/           # Shop settings
-│   ├── account/orders/           # User order history
-│   ├── notifications/           # User notifications
-│   ├── api/                     # Next.js API routes
-│   │   ├── auth/[...nextauth]/  # NextAuth endpoints
-│   │   ├── register/            # User registration
-│   │   ├── customer-orders/     # Checkout API
-│   │   └── account/orders/      # User orders API
-│   └── _zustand/               # Zustand stores
-│       ├── store.ts            # Cart store
-│       ├── wishlistStore.ts    # Wishlist store
-│       └── notificationStore.ts # Notification store
-├── components/                   # React components
-│   ├── Header.tsx             # Navigation header
-│   ├── Footer.tsx              # Footer
-│   ├── ProductItem.tsx         # Product card
-│   ├── Products.tsx            # Product grid
-│   ├── Filters.tsx             # Filter sidebar
-│   ├── SortBy.tsx              # Sort dropdown
-│   ├── Pagination.tsx          # Pagination
-│   ├── DashboardSidebar.tsx   # Dashboard sidebar
-│   └── modules/
-│       ├── cart/index.tsx     # Cart module
-│       └── wishlist/index.tsx # Wishlist module
-├── lib/                         # Libraries
-│   ├── api.ts                 # API client
-│   ├── config.ts              # Config (API base URL)
-│   ├── prisma.ts             # Prisma client singleton
-│   └── sanitize.ts            # XSS protection
-├── prisma/                     # Frontend Prisma schema
-│   └── schema.prisma
-├── server/                     # Express Backend
-│   ├── app.js                # Express entry point
-│   ├── prisma/schema.prisma  # Backend Prisma schema
-│   ├── routes/              # API route definitions
-│   ├── controllers/         # Route controllers
-│   ├── services/            # Business logic (order.service.ts)
-│   ├── middleware/          # Middlewares (rate limiter, logger)
-│   └── utils/              # Utilities (validation, errors, logger)
-└── types/                   # TypeScript types
-    └── notification.ts     # Notification types
+├── app/                         # Next.js App Router routes
+│   ├── (dashboard)/admin/        # Admin dashboard routes
+│   ├── (seller)/seller/          # Seller dashboard routes
+│   ├── account/orders/           # Buyer order history
+│   ├── api/                      # Next.js API routes and auth bridge
+│   ├── cart/                     # Cart page
+│   ├── checkout/                 # Checkout page
+│   ├── login/                    # Login page
+│   ├── product/[productSlug]/    # Product detail page
+│   ├── shop/                     # Marketplace listing and shop routes
+│   └── _zustand/                 # Cart, wishlist, pagination, sort stores
+├── components/                   # Shared React components
+│   ├── modules/cart/             # Cart module
+│   ├── modules/wishlist/         # Wishlist module
+│   └── ui/                       # UI primitives
+├── e2e/                          # Playwright tests
+├── hooks/                        # Client hooks
+├── lib/                          # API client, auth options, Prisma helpers
+├── prisma/                       # Prisma schema used by the Next.js app
+├── public/                       # Static assets and CSV templates
+├── RecentChange/                 # Change notes for local development history
+├── server/                       # Express backend
+│   ├── controllers/              # Request handlers
+│   ├── middleware/               # Auth, rate limiting, logging
+│   ├── routes/                   # Express route definitions
+│   ├── scripts/                  # Seed and utility scripts
+│   ├── services/                 # Business logic
+│   └── utils/                    # Backend utilities
+├── types/                        # Shared TypeScript types
+└── utils/                        # Frontend utility wrappers
 ```
 
----
+## Important Architecture Notes
 
-## Database Schema
+- NextAuth owns the browser session.
+- `/api/backend-token` generates a short-lived JWT for Express API calls.
+- Express middleware validates that token for protected backend routes.
+- Seller suspension is enforced in dashboard access, seller status UI, storefront visibility, and checkout validation.
+- Checkout creates buyer notifications and seller notifications.
+- Multi-seller checkout is represented through seller-specific sub-orders.
+- Public product images should live under `public/images/products` when possible to avoid broken remote image URLs.
 
-The application uses Prisma ORM with the following models:
+## Pre-Push Checklist
 
-| Model | Description |
-|-------|-------------|
-| **User** | Accounts with roles: buyer, seller, admin. Sellers have shop metadata |
-| **Product** | Product catalog (title, price, stock, images, seller relation) |
-| **Category** | Product categories |
-| **Customer_order** | Customer orders with shipping info and totals |
-| **Order_item** | Items in orders, links to seller for multi-vendor support |
-| **Wishlist** | User wishlist items |
-| **Notification** | User notifications (ORDER_UPDATE, PAYMENT_STATUS, PROMOTION, etc.) |
-| **Voucher** | Discount codes (PERCENTAGE or FIXED) |
-| **VoucherUsage** | Voucher usage history |
-| **Image** | Additional product images |
-| **Merchant** | Merchant/vendor information |
-| **Review** | Product reviews with 1-5 star ratings |
-| **SubOrder** | Sub-orders per merchant (multi-vendor) |
-| **SubOrderProduct** | Products in sub-orders with price/name snapshots |
-| **bulk_upload_batch** | CSV import batches |
-| **bulk_upload_item** | Items within upload batches |
-
----
-
-## API Reference
-
-### Products
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/products` | Get all products (filter/sort/paginate) |
-| POST | `/api/products` | Create product |
-| GET | `/api/products/:id` | Get product by ID |
-| PUT | `/api/products/:id` | Update product |
-| DELETE | `/api/products/:id` | Delete product |
-| GET | `/api/search` | Search products |
-| GET | `/api/slugs/:slug` | Get product by slug |
-| POST | `/api/main-image` | Upload main image |
-
-### Orders
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/orders` | Get all orders (admin) |
-| POST | `/api/orders` | Create order |
-| GET | `/api/orders/:id` | Get order by ID |
-| PUT | `/api/orders/:id` | Update order |
-| DELETE | `/api/orders/:id` | Delete order |
-| GET | `/api/seller/orders` | Seller sub-orders |
-| PATCH | `/api/seller/orders/:id/status` | Update sub-order status |
-
-### Categories
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/categories` | Get all categories |
-| POST | `/api/categories` | Create category |
-| GET | `/api/categories/:id` | Get category by ID |
-| PUT | `/api/categories/:id` | Update category |
-| DELETE | `/api/categories/:id` | Delete category |
-
-### Vouchers
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/vouchers` | Get all vouchers |
-| POST | `/api/vouchers` | Create voucher |
-| POST | `/api/vouchers/validate` | Validate voucher code |
-| POST | `/api/vouchers/apply` | Apply voucher to order |
-| PUT | `/api/vouchers/:id` | Update voucher |
-| DELETE | `/api/vouchers/:id` | Delete voucher |
-
-### Reviews
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/reviews/product/:productId` | Get product reviews |
-| GET | `/api/reviews/stats/:productId` | Get rating statistics |
-| POST | `/api/reviews` | Create review |
-| DELETE | `/api/reviews/:id` | Delete review |
-
-### Notifications
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/notifications/:userId` | Get user notifications |
-| GET | `/api/notifications/:userId/unread-count` | Get unread count |
-| POST | `/api/notifications` | Create notification |
-| POST | `/api/notifications/mark-read` | Mark as read |
-| DELETE | `/api/notifications/bulk` | Bulk delete |
-
-### Authentication
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/[...nextauth]` | NextAuth.js handler |
-| POST | `/api/register` | User registration |
-
----
-
-## State Management
-
-The app uses **Zustand** for client-side state management:
-
-| Store | Location | Description |
-|-------|----------|-------------|
-| Cart Store | `app/_zustand/store.ts` | Cart items, totals, cart groups per seller. Persisted to sessionStorage |
-| Wishlist Store | `app/_zustand/wishlistStore.ts` | Wishlist items. Persisted to sessionStorage |
-| Notification Store | `app/_zustand/notificationStore.ts` | Notifications with pagination and multi-select |
-| Sort Store | `app/_zustand/sortStore.ts` | Sort mode selection |
-| Pagination Store | `app/_zustand/paginationStore.ts` | Page state |
-
----
-
-## Available Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start frontend development server |
-| `npm run build` | Build for production |
-| `npm run start` | Start production server |
-| `npx prisma studio` | Open Prisma database GUI |
-| `npx prisma migrate dev` | Run database migrations |
-| `cd server && node app.js` | Start backend server |
-| `cd server && npx prisma migrate dev` | Run backend migrations |
-
----
-
-## Troubleshooting
-
-### Database Connection
-
-```sql
--- Create database
-CREATE DATABASE marketplace;
-
--- Verify connection
-mysql -u username -p -e "SHOW DATABASES;"
-```
-
-### Port Already in Use
-
-```powershell
-# Find process
-netstat -ano | findstr :3000
-netstat -ano | findstr :3001
-
-# Kill process
-taskkill /PID <pid> /F
-```
-
-### Module Errors
+Before pushing to GitHub:
 
 ```bash
-rm -rf node_modules
-rm package-lock.json
-npm install
-cd server && npm install
+git status --short
+npx tsc --noEmit --pretty false
+npm run build
+npx playwright test e2e/auth.spec.ts e2e/marketplace.spec.ts --project=chromium --reporter=line
+git diff --check
 ```
 
-### Apply New Migrations
+Review untracked files carefully. Source, tests, docs, CSV templates, and `RecentChange` notes may be intentional. Generated screenshots, reports, local logs, `.env`, and temporary scripts should not be committed.
 
-```bash
-# Frontend
-npx prisma migrate dev --name add_performance_indexes
+## Common Commands
 
-# Backend
-cd server
-npx prisma migrate dev --name add_performance_indexes
-```
-
----
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
-
----
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start frontend on port 3000 |
+| `npm run build` | Generate Prisma client and build Next.js |
+| `npm run start` | Start built Next.js app |
+| `npm run db:generate` | Generate Prisma client |
+| `npm run db:push` | Push Prisma schema to database |
+| `npm run db:seed` | Seed demo marketplace data |
+| `npm run db:studio` | Open Prisma Studio |
+| `cd server && npm start` | Start Express backend on port 5000 |
+| `cd server && npm run logs:error` | Read backend error logs |
 
 ## License
 
-MIT License
+MIT License.

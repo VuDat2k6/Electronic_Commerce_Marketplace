@@ -4,6 +4,7 @@
 import { ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ProductItem } from "./ProductItem";
+import StorefrontLoadError from "./StorefrontLoadError";
 import Link from 'next/link';
 import { products, Product } from '@/lib/demo-data';
 
@@ -78,6 +79,8 @@ interface ProductsSectionProps {
   title?: string;
   link?: string;
   linkText?: string;
+  hasError?: boolean;
+  errorStatus?: number;
 }
 
 export function FeaturedProducts() {
@@ -138,7 +141,7 @@ export function FeaturedProducts() {
         >
           {featuredProducts.map((product, index) => (
             <motion.div key={product.id} variants={item}>
-              <ProductItem product={product} index={index} />
+              <ProductItem product={product as any} index={index} />
             </motion.div>
           ))}
         </motion.div>
@@ -152,11 +155,11 @@ export function ProductsSection({
   isLoading = false,
   title = "FEATURED PRODUCTS",
   link = "/shop",
-  linkText = "View All"
+  linkText = "View All",
+  hasError = false,
+  errorStatus,
 }: ProductsSectionProps) {
-  const displayProducts = customProducts && customProducts.length > 0 
-    ? customProducts 
-    : products.slice(0, 8);
+  const displayProducts = customProducts ?? products.slice(0, 8);
 
   return (
     <section className="py-16 bg-gradient-to-b from-white to-gray-50">
@@ -199,13 +202,20 @@ export function ProductsSection({
         </div>
 
         {/* Loading state */}
-        {isLoading ? (
+        {hasError ? (
+          <StorefrontLoadError
+            resource="featured products"
+            status={errorStatus}
+            backHref="/shop"
+            backLabel="Browse catalog"
+          />
+        ) : isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
             {[...Array(8)].map((_, i) => (
               <ProductSkeleton key={i} />
             ))}
           </div>
-        ) : (
+        ) : displayProducts.length > 0 ? (
           <motion.div
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8"
             variants={container}
@@ -215,10 +225,14 @@ export function ProductsSection({
           >
             {displayProducts.map((product: any, index: number) => (
               <motion.div key={product.id || index} variants={item}>
-                <ProductItem product={product} index={index} />
+                <ProductItem product={product as any} index={index} />
               </motion.div>
             ))}
           </motion.div>
+        ) : (
+          <div className="py-12 text-center text-sm text-gray-500">
+            No featured products are available right now.
+          </div>
         )}
       </div>
     </section>

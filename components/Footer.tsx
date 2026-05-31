@@ -1,4 +1,3 @@
-// Footer - Exactly matching the zip file design
 "use client";
 
 import { ShoppingCart } from 'lucide-react';
@@ -47,7 +46,7 @@ export function Footer() {
       {/* Animated background */}
       <div className="absolute inset-0 opacity-10">
         <motion.div
-          className="absolute top-0 left-0 w-96 h-96 bg-purple-500 rounded-full filter blur-3xl"
+          className="absolute top-0 left-0 w-96 h-96 bg-purple-500 rounded-full filter blur-3xl will-change-transform"
           animate={{
             x: [0, 100, 0],
             y: [0, 50, 0],
@@ -58,7 +57,7 @@ export function Footer() {
           }}
         />
         <motion.div
-          className="absolute bottom-0 right-0 w-96 h-96 bg-pink-500 rounded-full filter blur-3xl"
+          className="absolute bottom-0 right-0 w-96 h-96 bg-pink-500 rounded-full filter blur-3xl will-change-transform"
           animate={{
             x: [0, -100, 0],
             y: [0, -50, 0],
@@ -224,7 +223,7 @@ export function Footer() {
             className="bg-gradient-to-r from-gray-400 via-purple-400 to-gray-400 bg-clip-text text-transparent"
             style={{ backgroundSize: '200% auto' }}
           >
-            © 2024 TFDTRONIC. All rights reserved.
+            (c) {new Date().getFullYear()} TFDTRONIC. All rights reserved.
           </motion.p>
         </motion.div>
       </div>

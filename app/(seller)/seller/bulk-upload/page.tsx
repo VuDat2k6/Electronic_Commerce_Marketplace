@@ -69,7 +69,7 @@ const SellerBulkUploadPage = () => {
       return;
     }
 
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
       toast.error("Please log in");
       return;
     }
@@ -78,12 +78,9 @@ const SellerBulkUploadPage = () => {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("sellerId", session.user.id);
+      formData.append("sellerId", (session?.user as any)?.id || "");
 
-      const res = await fetch("/api/bulk-upload", {
-        method: "POST",
-        body: formData,
-      });
+      const res = await apiClient.postForm("/api/bulk-upload", formData);
 
       const data = await res.json();
 
@@ -144,8 +141,8 @@ const SellerBulkUploadPage = () => {
             </p>
             <p className="text-sm text-gray-500 mt-2">
               Maximum CSV file size is 5MB.{" "}
-              <a href="/template.csv" download className="text-blue-500 hover:underline">
-                Download template
+              <a href="/bulk-upload-example.csv" download className="text-blue-500 hover:underline">
+                Download example CSV
               </a>
             </p>
           </label>
@@ -196,9 +193,9 @@ const SellerBulkUploadPage = () => {
           <h3 className="font-semibold mb-2">CSV Format:</h3>
           <div className="text-sm text-gray-600 overflow-x-auto">
             <code className="block bg-gray-100 p-2 rounded">
-              title,slug,price,manufacturer,description,mainImage,categoryName,inStock
+              title,price,manufacturer,inStock,mainImage,description,slug,categoryId
             </code>
-            <p className="mt-2">* slug must be unique. categoryName must match an existing category.</p>
+            <p className="mt-2">* Price must be a positive whole VND amount. Slug must be unique. categoryId accepts an existing category ID or category name.</p>
           </div>
         </div>
       </div>

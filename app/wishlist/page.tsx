@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { FaTrash, FaShoppingCart, FaHeart } from "react-icons/fa";
@@ -9,19 +9,15 @@ import { useWishlistStore, ProductInWishlist } from "@/app/_zustand/wishlistStor
 import { useProductStore } from "@/app/_zustand/store";
 import apiClient from "@/lib/api";
 import toast from "react-hot-toast";
+import { useSession } from "next-auth/react";
 
 const WishlistPage = () => {
   const { wishlist, removeFromWishlist, wishQuantity } = useWishlistStore();
   const [loading, setLoading] = useState(false);
   const [productDetails, setProductDetails] = useState<Record<string, any>>({});
+  const { data: session } = useSession();
 
-  useEffect(() => {
-    if (wishlist.length > 0) {
-      fetchProductDetails();
-    }
-  }, [wishlist]);
-
-  const fetchProductDetails = async () => {
+  const fetchProductDetails = useCallback(async () => {
     setLoading(true);
     try {
       // Use the optimized bulk slugs endpoint
@@ -67,7 +63,13 @@ const WishlistPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [wishlist]);
+
+  useEffect(() => {
+    if (wishlist.length > 0) {
+      fetchProductDetails();
+    }
+  }, [wishlist, fetchProductDetails]);
 
   const handleRemove = (id: string) => {
     removeFromWishlist(id);
@@ -76,7 +78,11 @@ const WishlistPage = () => {
 
   const { addToCart } = useProductStore();
 
-  const handleAddToCart = async (product: ProductInWishlist) => {
+  const handleAddToCart = async (product: ProductInWishlist, productDetail?: any) => {
+    if (!session?.user) {
+      toast.error("Please login to add to cart");
+      return;
+    }
     try {
       addToCart({
         id: product.id,
@@ -85,6 +91,8 @@ const WishlistPage = () => {
         image: product.image,
         slug: product.slug,
         amount: 1,
+        sellerId: product.sellerId || productDetail?.sellerId,
+        sellerName: product.sellerName || productDetail?.seller?.shopName,
       });
       toast.success("Added to cart");
     } catch (error) {
@@ -94,7 +102,7 @@ const WishlistPage = () => {
   };
 
   const formatPrice = (price: number) => {
-    return (price / 100).toFixed(2);
+    return price.toLocaleString('vi-VN') + '₫';
   };
 
   if (wishQuantity === 0) {
@@ -189,12 +197,12 @@ const WishlistPage = () => {
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <p className="text-xl font-bold text-gray-900">
-                          ${formatPrice(finalPrice)}
+                          {formatPrice(finalPrice)}
                         </p>
                       </div>
 
                       <button
-                        onClick={() => handleAddToCart(item)}
+                        onClick={() => handleAddToCart(item, productDetail)}
                         className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                       >
                         <FaShoppingCart className="w-4 h-4" />

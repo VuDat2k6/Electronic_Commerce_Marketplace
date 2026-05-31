@@ -4,6 +4,7 @@ import React from "react";
 import { sanitize } from "@/lib/sanitize";
 import { Search, Package } from "lucide-react";
 import Link from "next/link";
+import StorefrontLoadError from "@/components/StorefrontLoadError";
 
 interface Props {
   searchParams: Promise<{ search?: string }>;
@@ -13,6 +14,8 @@ interface Props {
 const SearchPage = async ({ searchParams }: Props) => {
   const sp = await searchParams;
   let products = [];
+  let loadFailed = false;
+  let loadErrorStatus: number | undefined;
 
   try {
     const data = await apiClient.get(
@@ -21,7 +24,8 @@ const SearchPage = async ({ searchParams }: Props) => {
 
     if (!data.ok) {
       console.error('Failed to fetch search results:', data.statusText);
-      products = [];
+      loadFailed = true;
+      loadErrorStatus = data.status;
     } else {
       const result = await data.json();
       // Handle both array and object response formats
@@ -36,26 +40,30 @@ const SearchPage = async ({ searchParams }: Props) => {
     }
   } catch (error) {
     console.error('Error fetching search results:', error);
-    products = [];
+    loadFailed = true;
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <SectionTitle title="Search" path={`Home | Search | ${sp?.search || 'All Products'}`} />
+      <SectionTitle title="Search" path={`Search | ${sp?.search || 'All Products'}`} />
       <div className="max-w-7xl mx-auto px-4 py-12">
         {sp?.search && (
           <div className="mb-8 text-center">
             <h2 className="text-2xl font-semibold text-gray-800">
               Search results for <span className="text-purple-600">&quot;{sanitize(sp?.search)}&quot;</span>
             </h2>
-            <p className="text-gray-500 mt-2">{products.length} products found</p>
+            <p className="text-gray-500 mt-2">
+              {loadFailed ? "Search temporarily unavailable" : `${products.length} products found`}
+            </p>
           </div>
         )}
 
-        {products.length > 0 ? (
+        {loadFailed ? (
+          <StorefrontLoadError resource="search results" status={loadErrorStatus} />
+        ) : products.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {products.map((product: any) => (
-              <ProductItem key={product.id} product={product} color="black" />
+              <ProductItem key={product.id} product={product} />
             ))}
           </div>
         ) : (

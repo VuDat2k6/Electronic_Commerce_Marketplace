@@ -4,13 +4,14 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, BarChart3, Package, ShoppingBag, Tag, Upload, Settings, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, BarChart3, Package, ShoppingBag, Tag, Upload, Settings, ArrowLeft, Star } from "lucide-react";
 
 const navItems = [
   { href: "/seller/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/seller/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/seller/products", label: "Products", icon: Package },
   { href: "/seller/orders", label: "Orders", icon: ShoppingBag },
+  { href: "/seller/reviews", label: "Reviews", icon: Star },
   { href: "/seller/vouchers", label: "Vouchers", icon: Tag },
   { href: "/seller/bulk-upload", label: "Bulk Upload", icon: Upload },
   { href: "/seller/settings", label: "Settings", icon: Settings },

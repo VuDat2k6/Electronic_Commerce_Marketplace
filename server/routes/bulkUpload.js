@@ -2,11 +2,11 @@
  * Bulk Upload Routes with Authentication
  * 
  * Provides secure bulk upload endpoints:
- * - GET /api/bulk-upload - Seller/Admin (list batches)
- * - POST /api/bulk-upload - Seller/Admin (upload CSV)
- * - GET /api/bulk-upload/:batchId - Seller/Admin (batch detail)
- * - PUT /api/bulk-upload/:batchId - Seller/Admin (update items)
- * - DELETE /api/bulk-upload/:batchId - Seller/Admin (delete batch)
+ * - GET /api/bulk-upload - Seller (list batches)
+ * - POST /api/bulk-upload - Seller (upload CSV)
+ * - GET /api/bulk-upload/:batchId - Seller (batch detail)
+ * - PUT /api/bulk-upload/:batchId - Seller (update items)
+ * - DELETE /api/bulk-upload/:batchId - Seller (delete batch)
  * 
  * @module routes/bulkUpload
  */
@@ -22,7 +22,7 @@ const {
   deleteBatch,
 } = require("../controllers/bulkUpload");
 
-const { authenticate, requireSellerOrAdmin } = require('../middleware/auth');
+const { authenticate, requireSeller, requireActiveSeller } = require('../middleware/auth');
 
 // ============================================================
 // PROTECTED ROUTES
@@ -32,36 +32,36 @@ const { authenticate, requireSellerOrAdmin } = require('../middleware/auth');
 /**
  * GET /api/bulk-upload
  * List all bulk upload batches
- * Seller or Admin only
+ * Active seller only
  */
-router.get("/", authenticate, requireSellerOrAdmin, listBatches);
+router.get("/", authenticate, requireSeller, requireActiveSeller, listBatches);
 
 /**
  * POST /api/bulk-upload
  * Upload CSV and create batch
- * Seller or Admin only
+ * Active seller only
  */
-router.post("/", authenticate, requireSellerOrAdmin, uploadCsvAndCreateBatch);
+router.post("/", authenticate, requireSeller, requireActiveSeller, uploadCsvAndCreateBatch);
 
 /**
  * GET /api/bulk-upload/:batchId
  * Get batch detail
- * Seller or Admin only
+ * Active seller only
  */
-router.get("/:batchId", authenticate, requireSellerOrAdmin, getBatchDetail);
+router.get("/:batchId", authenticate, requireSeller, requireActiveSeller, getBatchDetail);
 
 /**
  * PUT /api/bulk-upload/:batchId
  * Update batch items
- * Seller or Admin only
+ * Active seller only
  */
-router.put("/:batchId", authenticate, requireSellerOrAdmin, updateBatchItems);
+router.put("/:batchId", authenticate, requireSeller, requireActiveSeller, updateBatchItems);
 
 /**
  * DELETE /api/bulk-upload/:batchId
  * Delete a batch
- * Seller or Admin only
+ * Active seller only
  */
-router.delete("/:batchId", authenticate, requireSellerOrAdmin, deleteBatch);
+router.delete("/:batchId", authenticate, requireSeller, requireActiveSeller, deleteBatch);
 
 module.exports = router;

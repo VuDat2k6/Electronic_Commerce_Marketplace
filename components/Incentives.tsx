@@ -1,4 +1,3 @@
-// Incentives - Exactly matching the zip file design
 "use client";
 
 import { Package, Headphones, ShoppingCart } from 'lucide-react';
@@ -8,21 +7,21 @@ const features = [
   {
     icon: Package,
     title: 'Free Shipping',
-    description: 'Our shipping is completely free and that is completely good for our customers.',
+    description: 'Enjoy complimentary delivery on all orders. No hidden fees, no minimum spend - straight to your doorstep.',
     color: 'from-blue-500 to-cyan-500',
     delay: 0,
   },
   {
     icon: Headphones,
     title: '24/7 Customer Support',
-    description: 'Our support is working all day and night to answer any question you have.',
+    description: 'Our dedicated support team is available around the clock to help you with any questions or concerns.',
     color: 'from-purple-500 to-pink-500',
     delay: 0.2,
   },
   {
     icon: ShoppingCart,
-    title: 'Fast Shopping Cart',
-    description: 'We have super fast shopping experience and you will enjoy it.',
+    title: 'Seamless Checkout',
+    description: 'A streamlined, secure checkout experience designed to get you from cart to confirmation in seconds.',
     color: 'from-orange-500 to-red-500',
     delay: 0.4,
   },

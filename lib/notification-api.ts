@@ -48,29 +48,6 @@ export const notificationApi = {
   },
 
   /**
-   * Get unread notification count by email (optimization to avoid double API call)
-   * Fetches user and count in parallel on the server
-   */
-  async getUnreadCountByEmail(email: string): Promise<{ unreadCount: number }> {
-    // First get the user by email
-    const userResponse = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/users/email/${encodeURIComponent(email)}`
-    );
-
-    if (!userResponse.ok) {
-      throw new Error('User not found');
-    }
-
-    const userData = await userResponse.json();
-    if (!userData?.id) {
-      throw new Error('User ID not found');
-    }
-
-    // Then get the unread count
-    return this.getUnreadCount(userData.id);
-  },
-
-  /**
    * Create a new notification
    */
   async createNotification(data: NotificationCreateInput) {

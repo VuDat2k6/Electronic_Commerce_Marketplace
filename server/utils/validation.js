@@ -348,7 +348,7 @@ const validateOrderData = (orderData) => {
   validatedData.email = safeValidate(orderValidation.validateEmail, orderData.email, 'email');
   validatedData.phone = safeValidate(orderValidation.validatePhone, orderData.phone, 'phone');
   validatedData.company = safeValidate(orderValidation.validateAddress, orderData.company, 'company');
-  validatedData.address = safeValidate(orderValidation.validateAddress, orderData.adress || orderData.address, 'address');
+  validatedData.address = safeValidate(orderValidation.validateAddress, orderData.address || orderData.address, 'address');
   validatedData.apartment = safeValidate(orderValidation.validateAddress, orderData.apartment, 'apartment');
   validatedData.city = safeValidate(orderValidation.validateAddress, orderData.city, 'city');
   validatedData.country = safeValidate(orderValidation.validateAddress, orderData.country, 'country');

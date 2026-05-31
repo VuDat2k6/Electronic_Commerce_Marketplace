@@ -9,6 +9,7 @@
  */
 
 const jwt = require('jsonwebtoken');
+const prisma = require('../utils/db');
 
 // JWT Secret from environment - should be same as NEXTAUTH_SECRET for consistency
 const JWT_SECRET = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET;
@@ -199,6 +200,51 @@ const requireSeller = requireRole(ROLES.SELLER);
  */
 const requireSellerOrAdmin = requireRole(ROLES.SELLER, ROLES.ADMIN);
 
+async function requireActiveSeller(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({
+      error: 'Authentication required',
+      code: 'UNAUTHORIZED'
+    });
+  }
+
+  if (req.user.role === ROLES.ADMIN) {
+    return next();
+  }
+
+  if (req.user.role !== ROLES.SELLER) {
+    return res.status(403).json({
+      error: 'Seller approval required',
+      code: 'SELLER_NOT_ACTIVE',
+      message: 'Your seller account must be approved before accessing seller tools'
+    });
+  }
+
+  try {
+    const seller = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { role: true, shopStatus: true },
+    });
+
+    if (!seller || seller.role !== ROLES.SELLER || seller.shopStatus !== 'ACTIVE') {
+      return res.status(403).json({
+        error: 'Seller approval required',
+        code: 'SELLER_NOT_ACTIVE',
+        message: 'Your seller account must be approved before accessing seller tools'
+      });
+    }
+
+    req.user.shopStatus = seller.shopStatus;
+    return next();
+  } catch (error) {
+    console.error('Active seller verification failed:', error);
+    return res.status(500).json({
+      error: 'Unable to verify seller status',
+      code: 'SELLER_STATUS_CHECK_FAILED'
+    });
+  }
+}
+
 /**
  * Generate JWT token for a user
  * Used for testing or when creating tokens manually
@@ -310,6 +356,7 @@ module.exports = {
   requireAdmin,
   requireSeller,
   requireSellerOrAdmin,
+  requireActiveSeller,
   protectResource,
   protectSeller,
   protectBuyer,

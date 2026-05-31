@@ -11,6 +11,8 @@ import { notFound } from "next/navigation";
 import React from "react";
 import { FaFacebook, FaTwitter, FaPinterest } from "react-icons/fa";
 import { sanitize } from "@/lib/sanitize";
+import prisma from "@/utils/db";
+import StorefrontLoadError from "@/components/StorefrontLoadError";
 
 interface ImageItem {
   imageID: string;
@@ -21,11 +23,47 @@ interface ImageItem {
 interface SingleProductPageProps {
   params: Promise<{ productSlug: string; id: string }>;
 }
+export const dynamic = 'force-dynamic';
 
 const SingleProductPage = async ({ params }: SingleProductPageProps) => {
   const paramsAwaited = await params;
-  const data = await apiClient.get(`/api/slugs/${paramsAwaited?.productSlug}`);
-  const product = await data.json();
+  const renderLoadFailure = (status?: number) => (
+    <div className="min-h-screen bg-white">
+      <div className="mx-auto max-w-3xl px-4 py-20">
+        <StorefrontLoadError
+          resource="this product"
+          status={status}
+          backHref="/shop"
+          backLabel="Browse catalog"
+        />
+      </div>
+    </div>
+  );
+
+  let data: Response;
+  try {
+    data = await apiClient.get(`/api/slugs/${paramsAwaited?.productSlug}`);
+  } catch (error) {
+    console.error("Error fetching product:", error);
+    return renderLoadFailure();
+  }
+
+  if (data.status === 404) {
+    notFound();
+  }
+
+  if (!data.ok) {
+    console.error("Failed to fetch product:", data.status);
+    return renderLoadFailure(data.status);
+  }
+
+  let product;
+  try {
+    product = await data.json();
+  } catch (error) {
+    console.error("Error parsing product response:", error);
+    return renderLoadFailure();
+  }
 
   let images: ImageItem[] = [];
   if (paramsAwaited?.id && paramsAwaited.id !== "undefined") {
@@ -43,9 +81,49 @@ const SingleProductPage = async ({ params }: SingleProductPageProps) => {
     notFound();
   }
 
+  let reviewsData = null;
+  try {
+    const reviews = await prisma.review.findMany({
+      where: { productId: product.id, status: 'PUBLISHED' },
+      include: { user: { select: { email: true } }, product: { select: { title: true, slug: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 6
+    });
+
+    let averageRating = 0;
+    const distribution: Record<string, number> = { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 };
+    if (reviews.length > 0) {
+      let totalRating = 0;
+      reviews.forEach((r: any) => {
+        totalRating += r.rating;
+        distribution[r.rating.toString()] += 1;
+      });
+      averageRating = totalRating / reviews.length;
+    }
+
+    reviewsData = {
+      reviews: reviews.map(({ id, rating, comment, createdAt, user }) => ({
+        id,
+        rating,
+        comment,
+        createdAt: createdAt.toISOString(),
+        user,
+      })),
+      pagination: { total: reviews.length },
+      stats: { averageRating, totalReviews: reviews.length, distribution }
+    };
+  } catch (e) {
+    console.error("Error fetching reviews from DB:", e);
+  }
+
   const formatPrice = (price: number) => {
-    return (price / 100).toLocaleString('vi-VN') + '₫';
+    return price.toLocaleString('vi-VN') + ' VND';
   };
+
+  const originalPrice = product?.originalPrice || (product?.price > 500000 ? product.price * 1.15 : undefined);
+  const discount = originalPrice
+    ? Math.round(((originalPrice - product?.price) / originalPrice) * 100)
+    : 0;
 
   return (
     <div className="bg-white min-h-screen">
@@ -96,12 +174,24 @@ const SingleProductPage = async ({ params }: SingleProductPageProps) => {
           <div className="space-y-6">
             {/* Title & Price */}
             <div>
-              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-3">
+              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-3 flex items-center gap-3">
                 {sanitize(product?.title)}
+                {discount > 0 && (
+                  <span className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-sm font-bold px-3 py-1 rounded-full">
+                    -{discount}%
+                  </span>
+                )}
               </h1>
-              <p className="text-3xl font-bold text-gray-900">
-                {formatPrice(product?.price)}
-              </p>
+              <div className="flex items-baseline gap-3 mb-2">
+                <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  {formatPrice(product?.price || 0)}
+                </p>
+                {originalPrice && (
+                  <p className="text-xl text-gray-400 line-through">
+                    {formatPrice(originalPrice)}
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* Stock */}
@@ -153,7 +243,7 @@ const SingleProductPage = async ({ params }: SingleProductPageProps) => {
 
         {/* Product Tabs */}
         <div className="mt-16">
-          <ProductTabs product={product} />
+          <ProductTabs product={product} reviewsData={reviewsData || undefined} />
         </div>
       </div>
     </div>

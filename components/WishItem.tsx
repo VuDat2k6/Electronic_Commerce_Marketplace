@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import { useProductStore } from "@/app/_zustand/store";
 import toast from "react-hot-toast";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 
 interface WishItemProps {
   id: string;
@@ -31,9 +32,14 @@ export default function WishItem({
   const [isAdding, setIsAdding] = useState(false);
   const addToCart = useProductStore((state) => state.addToCart);
   const isOutOfStock = !stockAvailabillity || stockAvailabillity <= 0;
+  const { data: session } = useSession();
 
   const handleAddToCart = () => {
     if (isOutOfStock) return;
+    if (!session?.user) {
+      toast.error("Please login to add to cart");
+      return;
+    }
     setIsAdding(true);
     addToCart({
       id,

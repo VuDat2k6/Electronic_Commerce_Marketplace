@@ -34,15 +34,21 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.email,
           role: user.role,
+          shopStatus: user.shopStatus,
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }: any) {
+    async jwt({ token, user, trigger, session }: any) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.shopStatus = user.shopStatus;
+      }
+      if (trigger === "update" && session) {
+        if (session.role) token.role = session.role;
+        if (session.shopStatus) token.shopStatus = session.shopStatus;
       }
       return token;
     },
@@ -50,6 +56,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
+        session.user.shopStatus = token.shopStatus as string;
       }
       return session;
     },

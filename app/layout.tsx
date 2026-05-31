@@ -36,7 +36,7 @@ export default async function RootLayout({
 }>) {
   const session = await getServerSession(authOptions) as any;
   return (
-    <html lang="en" data-theme="light">
+    <html lang="en" data-theme="light" data-scroll-behavior="smooth">
       <body className={`${inter.className} ${montserrat.variable}`}>
         <SessionProvider session={session}>
           <ProgressBar />

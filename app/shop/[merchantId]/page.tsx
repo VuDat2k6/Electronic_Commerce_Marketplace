@@ -2,7 +2,6 @@ import React from "react";
 import { getMerchantShop } from "../../../server/services/order.service";
 import Link from "next/link";
 import Image from "next/image";
-import { motion } from "framer-motion";
 import { Store, Package, ArrowLeft } from "lucide-react";
 
 interface ShopPageProps {
@@ -42,7 +41,7 @@ export default async function ShopPage({ params }: ShopPageProps) {
 
   const formatPrice = (price: number | string) => {
     const numPrice = typeof price === 'string' ? parseInt(price) : price;
-    return (numPrice / 100).toLocaleString('vi-VN') + '₫';
+    return numPrice.toLocaleString('vi-VN') + '₫';
   };
 
   return (
@@ -83,11 +82,8 @@ export default async function ShopPage({ params }: ShopPageProps) {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {products.map((product, index) => (
-              <motion.div
+              <div
                 key={product.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
               >
                 <Link
                   href={`/product/${product.slug || product.id}`}
@@ -117,7 +113,7 @@ export default async function ShopPage({ params }: ShopPageProps) {
                     </p>
                   </div>
                 </Link>
-              </motion.div>
+              </div>
             ))}
           </div>
         )}

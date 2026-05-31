@@ -31,6 +31,12 @@ async function searchProducts(request, response) {
         const products = await prisma.product.findMany({
             where: {
                 status: 'PUBLISHED',
+                seller: {
+                    is: {
+                        role: 'seller',
+                        shopStatus: 'ACTIVE',
+                    },
+                },
                 OR: [
                     {
                         title: {
@@ -50,7 +56,8 @@ async function searchProducts(request, response) {
                 ]
             },
             include: {
-                category: { select: { id: true, name: true } }
+                category: { select: { id: true, name: true } },
+                seller: { select: { id: true, shopName: true } }
             },
             take: 50 // Limit results for performance
         });
