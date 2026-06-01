@@ -83,7 +83,7 @@ const CheckoutPage = () => {
     try {
       const body = await response.json();
       if (Array.isArray(body.details) && body.details.length > 0) {
-        return body.details.join(", ");
+        return body.details.join(". ");
       }
       return body.message || body.error || body.details || fallback;
     } catch {

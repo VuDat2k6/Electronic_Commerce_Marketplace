@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import Image from "next/image";
 import Link from "next/link";
 import { Minus, Plus, Trash2, ArrowRight, Store } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export const CartModule = () => {
   const {
@@ -19,7 +19,12 @@ export const CartModule = () => {
     clearCart,
   } = useCartStore();
 
+  const [mounted, setMounted] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const cartGroups = getCartGroups();
 
@@ -53,6 +58,21 @@ export const CartModule = () => {
   const formatPrice = (cents: number) => {
     return cents.toLocaleString('vi-VN') + '₫';
   };
+
+  if (!mounted) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-8">
+        <div className="mb-8 h-8 w-44 animate-pulse rounded-lg bg-gray-200" />
+        <div className="grid gap-8 lg:grid-cols-3">
+          <div className="space-y-4 lg:col-span-2">
+            <div className="h-40 animate-pulse rounded-2xl bg-white" />
+            <div className="h-40 animate-pulse rounded-2xl bg-white" />
+          </div>
+          <div className="h-72 animate-pulse rounded-2xl bg-white" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">

@@ -102,6 +102,7 @@ model User {
   products          Product[]
   buyerOrders       Customer_order[] @relation("BuyerOrders")
   sellerOrderItems  Order_item[]
+  cartItems         CartItem[]
   Wishlist          Wishlist[]
   notifications     Notification[]
   bulkUploadBatches bulk_upload_batch[] @relation("UserBatches")
@@ -135,6 +136,7 @@ model Product {
   // Relations
   category        Category          @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   seller          User              @relation(fields: [sellerId], references: [id])
+  cartItems       CartItem[]
   orderItems      Order_item[]
   Wishlist        Wishlist[]
   reviews         Review[]
@@ -267,6 +269,25 @@ model Wishlist {
   userId    String
 
   @@unique([productId, userId])
+  @@index([userId])
+  @@index([productId])
+}
+
+// ============================================================
+// CART ITEM MODEL
+// ============================================================
+
+model CartItem {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, productId])
   @@index([userId])
   @@index([productId])
 }

@@ -59,8 +59,19 @@ type SellerOrderGroup = {
   sellerEmail: string;
 };
 
+const ORDER_CANCEL_WINDOW_MS = 12 * 60 * 60 * 1000;
+const CANCELLABLE_SUB_ORDER_STATUSES = new Set(["PENDING", "CONFIRMED", "PROCESSING"]);
+const CLOSED_PARENT_ORDER_STATUSES = new Set(["canceled", "delivered"]);
+
 export interface ListCustomerOrdersResult {
   orders: unknown[];
+}
+
+export interface CancelCustomerOrderResult {
+  orderId: string;
+  status: "canceled";
+  cancelledSubOrderCount: number;
+  restockedItemCount: number;
 }
 
 export interface ListSellerSubOrdersResult {
@@ -612,6 +623,146 @@ export async function listCustomerOrders(customerId: string): Promise<ListCustom
   });
 
   return { orders };
+}
+
+export async function cancelCustomerOrder(
+  orderId: string,
+  customerId: string
+): Promise<CancelCustomerOrderResult> {
+  if (!orderId) {
+    throw new Error("orderId is required");
+  }
+  if (!customerId) {
+    throw new Error("customerId is required");
+  }
+
+  const now = new Date();
+
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.customer_order.findFirst({
+      where: { id: orderId, buyerId: customerId },
+      include: {
+        subOrders: {
+          include: {
+            products: true,
+          },
+        },
+        payments: true,
+      },
+    });
+
+    if (!order) {
+      throw new Error("Order not found");
+    }
+
+    if (CLOSED_PARENT_ORDER_STATUSES.has(order.status)) {
+      throw new Error("This order is already closed");
+    }
+
+    if (order.payments.some((payment) => payment.status === "COMPLETED")) {
+      throw new Error("Paid orders require support-assisted cancellation because refunds are not automated yet");
+    }
+
+    const placedAt = order.dateTime;
+    const cancelDeadline = new Date(placedAt.getTime() + ORDER_CANCEL_WINDOW_MS);
+
+    if (now > cancelDeadline) {
+      throw new Error("Orders can only be cancelled within 12 hours after placement");
+    }
+
+    const blockedSubOrder = order.subOrders.find(
+      (subOrder) => !CANCELLABLE_SUB_ORDER_STATUSES.has(subOrder.status)
+    );
+
+    if (blockedSubOrder) {
+      throw new Error("This order can no longer be cancelled because fulfillment has already started");
+    }
+
+    const orderedProducts = order.subOrders.flatMap((subOrder) => subOrder.products);
+
+    for (const item of orderedProducts) {
+      await tx.product.update({
+        where: { id: item.productId },
+        data: { inStock: { increment: item.quantity } },
+      });
+    }
+
+    await tx.subOrder.updateMany({
+      where: { parentOrderId: order.id },
+      data: {
+        status: "CANCELLED",
+        cancelledAt: now,
+        cancelReason: "Cancelled by buyer within 12 hours",
+      },
+    });
+
+    await tx.customer_order.update({
+      where: { id: order.id },
+      data: { status: "canceled" },
+    });
+
+    await tx.payment.updateMany({
+      where: {
+        orderId: order.id,
+        status: { not: "COMPLETED" },
+      },
+      data: { status: "CANCELLED" },
+    });
+
+    const voucherUsages = await tx.voucherUsage.findMany({
+      where: { orderId: order.id },
+      select: { voucherId: true },
+    });
+    const voucherIds = [...new Set(voucherUsages.map((usage) => usage.voucherId))];
+
+    for (const voucherId of voucherIds) {
+      await tx.voucher.updateMany({
+        where: { id: voucherId, usedCount: { gt: 0 } },
+        data: { usedCount: { decrement: 1 } },
+      });
+    }
+
+    if (voucherIds.length > 0) {
+      await tx.voucherUsage.deleteMany({ where: { orderId: order.id } });
+    }
+
+    const sellerIds = [...new Set(order.subOrders.map((subOrder) => subOrder.merchantId))];
+    await tx.notification.createMany({
+      data: [
+        {
+          userId: customerId,
+          title: "Order cancelled",
+          message: `Your order #${order.id} was cancelled successfully within the 12-hour window.`,
+          type: "ORDER_UPDATE",
+          priority: "NORMAL",
+          isRead: false,
+          metadata: {
+            orderId: order.id,
+            cancelledAt: now.toISOString(),
+          },
+        },
+        ...sellerIds.map((sellerId) => ({
+          userId: sellerId,
+          title: "Order cancelled by buyer",
+          message: `Order #${order.id} was cancelled by the buyer within the 12-hour window.`,
+          type: "ORDER_UPDATE" as const,
+          priority: "NORMAL" as const,
+          isRead: false,
+          metadata: {
+            orderId: order.id,
+            cancelledAt: now.toISOString(),
+          },
+        })),
+      ],
+    });
+
+    return {
+      orderId: order.id,
+      status: "canceled",
+      cancelledSubOrderCount: order.subOrders.length,
+      restockedItemCount: orderedProducts.reduce((sum, item) => sum + item.quantity, 0),
+    };
+  });
 }
 
 export async function listSellerSubOrders(merchantId: string): Promise<ListSellerSubOrdersResult> {

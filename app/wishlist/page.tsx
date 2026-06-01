@@ -13,9 +13,14 @@ import { useSession } from "next-auth/react";
 
 const WishlistPage = () => {
   const { wishlist, removeFromWishlist, wishQuantity } = useWishlistStore();
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [productDetails, setProductDetails] = useState<Record<string, any>>({});
   const { data: session } = useSession();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const fetchProductDetails = useCallback(async () => {
     setLoading(true);
@@ -104,6 +109,21 @@ const WishlistPage = () => {
   const formatPrice = (price: number) => {
     return price.toLocaleString('vi-VN') + '₫';
   };
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <SectionTitle title="My Wishlist" path="Home | Wishlist" />
+        <div className="mx-auto max-w-6xl px-4 py-8">
+          <div className="mb-6 h-8 w-52 animate-pulse rounded-lg bg-gray-200" />
+          <div className="overflow-hidden rounded-lg bg-white shadow-sm">
+            <div className="h-32 animate-pulse border-b border-gray-100 bg-gray-100" />
+            <div className="h-32 animate-pulse bg-gray-100" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (wishQuantity === 0) {
     return (

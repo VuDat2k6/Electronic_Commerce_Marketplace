@@ -53,7 +53,7 @@ const Filters = ({ onApplied }: { onApplied?: () => void }) => {
   }, [searchParams]);
 
   const applyFilters = () => {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(searchParams.toString());
     params.set("outOfStock", inputCategory.outOfStock.isChecked.toString());
     params.set("inStock", inputCategory.inStock.isChecked.toString());
     params.set("rating", inputCategory.ratingFilter.value.toString());
@@ -71,7 +71,14 @@ const Filters = ({ onApplied }: { onApplied?: () => void }) => {
       priceFilter: { text: "price", value: 80000000 },
       ratingFilter: { text: "rating", value: 0 },
     });
-    replace(`${pathname}?outOfStock=true&inStock=true&rating=0&price=80000000&sort=${sortBy}&page=1`);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("outOfStock", "true");
+    params.set("inStock", "true");
+    params.set("rating", "0");
+    params.set("price", "80000000");
+    params.set("sort", sortBy);
+    params.set("page", "1");
+    replace(`${pathname}?${params}`);
     onApplied?.();
   };
 

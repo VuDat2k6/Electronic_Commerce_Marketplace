@@ -83,6 +83,10 @@ const STATUS_LABELS: Record<string, string> = {
   canceled: "Canceled",
 };
 
+const ORDER_CANCEL_WINDOW_MS = 12 * 60 * 60 * 1000;
+const BLOCKED_CANCEL_STATUSES = new Set(["SHIPPED", "DELIVERED", "CANCELLED"]);
+const CLOSED_ORDER_STATUSES = new Set(["canceled", "delivered"]);
+
 const getImageSrc = (image?: string | null) => {
   if (!image) return "/product_placeholder.jpg";
   if (image.startsWith("http") || image.startsWith("/")) return image;
@@ -93,6 +97,7 @@ const AccountOrdersPage = () => {
   const { data: session } = useSession();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
 
   const fetchOrders = useCallback(async () => {
@@ -145,8 +150,88 @@ const AccountOrdersPage = () => {
     });
   };
 
+  const formatDateTime = (date: Date) => {
+    return date.toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   const formatPrice = (amount: number) => {
     return amount.toLocaleString("vi-VN") + " VND";
+  };
+
+  const getCancelDeadline = (order: Order) => {
+    if (!order.dateTime) return null;
+    const placedAt = new Date(order.dateTime);
+    if (Number.isNaN(placedAt.getTime())) return null;
+    return new Date(placedAt.getTime() + ORDER_CANCEL_WINDOW_MS);
+  };
+
+  const canCancelOrder = (order: Order) => {
+    const deadline = getCancelDeadline(order);
+    if (!deadline || Date.now() > deadline.getTime()) return false;
+    if (CLOSED_ORDER_STATUSES.has(order.status)) return false;
+    return order.subOrders.every((subOrder) => !BLOCKED_CANCEL_STATUSES.has(subOrder.status));
+  };
+
+  const getCancelUnavailableReason = (order: Order) => {
+    const deadline = getCancelDeadline(order);
+
+    if (!deadline) {
+      return "Cancellation status is unavailable for this order.";
+    }
+
+    if (Date.now() > deadline.getTime()) {
+      return `Cancellation window expired on ${formatDateTime(deadline)}.`;
+    }
+
+    if (CLOSED_ORDER_STATUSES.has(order.status)) {
+      return "This order is already closed.";
+    }
+
+    const blockedSubOrder = order.subOrders.find((subOrder) =>
+      BLOCKED_CANCEL_STATUSES.has(subOrder.status)
+    );
+
+    if (blockedSubOrder) {
+      return `This order can no longer be cancelled because it is ${STATUS_LABELS[blockedSubOrder.status] || blockedSubOrder.status}.`;
+    }
+
+    return "This order can no longer be cancelled.";
+  };
+
+  const handleCancelOrder = async (order: Order) => {
+    if (!canCancelOrder(order)) {
+      toast.error("This order can no longer be cancelled");
+      return;
+    }
+
+    const confirmed = window.confirm("Cancel this order? Inventory and voucher usage will be restored.");
+    if (!confirmed) return;
+
+    setCancellingOrderId(order.id);
+    try {
+      const response = await fetch(`/api/account/orders/${order.id}/cancel`, {
+        method: "PATCH",
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Unable to cancel order");
+      }
+
+      toast.success("Order cancelled successfully");
+      await fetchOrders();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to cancel order";
+      toast.error(message);
+    } finally {
+      setCancellingOrderId(null);
+    }
   };
 
   if (loading) {
@@ -188,6 +273,8 @@ const AccountOrdersPage = () => {
               (sum, so) => sum + so.products.reduce((s, p) => s + p.quantity, 0),
               0
             );
+            const cancelDeadline = getCancelDeadline(order);
+            const canCancel = canCancelOrder(order);
 
             return (
               <div
@@ -222,7 +309,28 @@ const AccountOrdersPage = () => {
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-wrap items-center justify-end gap-3">
+                    {canCancel ? (
+                      <button
+                        type="button"
+                        disabled={cancellingOrderId === order.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleCancelOrder(order);
+                        }}
+                        className="rounded-full border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
+                        title={cancelDeadline ? `Available until ${formatDateTime(cancelDeadline)}` : undefined}
+                      >
+                        {cancellingOrderId === order.id ? "Cancelling..." : "Cancel order"}
+                      </button>
+                    ) : (
+                      <span
+                        className="rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-xs font-semibold text-gray-500"
+                        title={getCancelUnavailableReason(order)}
+                      >
+                        Cancel unavailable
+                      </span>
+                    )}
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-medium ${
                         STATUS_COLORS[order.status] || "bg-gray-100 text-gray-800"
@@ -248,7 +356,19 @@ const AccountOrdersPage = () => {
                   <div className="border-t border-gray-200">
                     {/* 收货地址 */}
                     <div className="px-6 py-4 bg-blue-50 border-b border-gray-200">
-                      <h3 className="text-sm font-medium text-gray-900 mb-2">Shipping Address</h3>
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                        <h3 className="text-sm font-medium text-gray-900">Shipping Address</h3>
+                        {canCancel && cancelDeadline && (
+                          <span className="text-xs font-medium text-red-600">
+                            Cancellation available until {formatDateTime(cancelDeadline)}
+                          </span>
+                        )}
+                        {!canCancel && (
+                          <span className="text-xs font-medium text-gray-500">
+                            {getCancelUnavailableReason(order)}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-600">
                         {order.name} {order.lastname}
                         <br />

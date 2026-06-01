@@ -5,16 +5,16 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 
 const categories = [
-  { id: "smartphones", name: "Smartphones", icon: Smartphone, color: "from-blue-500 to-cyan-500", href: "/shop/smartphones" },
-  { id: "laptops", name: "Laptops", icon: Laptop, color: "from-violet-500 to-purple-600", href: "/shop/laptops" },
-  { id: "tablets", name: "Tablets", icon: Tablet, color: "from-sky-500 to-blue-600", href: "/shop/tablets" },
-  { id: "audio", name: "Audio", icon: Headphones, color: "from-pink-500 to-rose-600", href: "/shop/audio" },
-  { id: "smart-watches", name: "Smart Watches", icon: Watch, color: "from-orange-500 to-amber-500", href: "/shop/smart-watches" },
-  { id: "gaming", name: "Gaming", icon: Gamepad2, color: "from-indigo-500 to-blue-500", href: "/shop/gaming" },
-  { id: "cameras", name: "Cameras", icon: Camera, color: "from-red-500 to-pink-600", href: "/shop/cameras" },
-  { id: "accessories", name: "Accessories", icon: Mouse, color: "from-emerald-500 to-teal-500", href: "/shop/accessories" },
-  { id: "computers", name: "PCs & Monitors", icon: Monitor, color: "from-green-500 to-lime-500", href: "/shop/computers" },
-  { id: "printers", name: "Printers", icon: Printer, color: "from-slate-500 to-gray-700", href: "/shop/printers" },
+  { id: "smartphones", name: "Smartphones", icon: Smartphone, color: "from-blue-500 to-cyan-500", href: "/shop?category=smartphones" },
+  { id: "laptops", name: "Laptops", icon: Laptop, color: "from-violet-500 to-purple-600", href: "/shop?category=laptops" },
+  { id: "tablets", name: "Tablets", icon: Tablet, color: "from-sky-500 to-blue-600", href: "/shop?category=tablets" },
+  { id: "audio", name: "Audio", icon: Headphones, color: "from-pink-500 to-rose-600", href: "/shop?category=audio" },
+  { id: "smart-watches", name: "Smart Watches", icon: Watch, color: "from-orange-500 to-amber-500", href: "/shop?category=smart-watches" },
+  { id: "gaming", name: "Gaming", icon: Gamepad2, color: "from-indigo-500 to-blue-500", href: "/shop?category=gaming" },
+  { id: "cameras", name: "Cameras", icon: Camera, color: "from-red-500 to-pink-600", href: "/shop?category=cameras" },
+  { id: "accessories", name: "Accessories", icon: Mouse, color: "from-emerald-500 to-teal-500", href: "/shop?category=accessories" },
+  { id: "computers", name: "PCs & Monitors", icon: Monitor, color: "from-green-500 to-lime-500", href: "/shop?category=computers" },
+  { id: "printers", name: "Printers", icon: Printer, color: "from-slate-500 to-gray-700", href: "/shop?category=printers" },
 ];
 
 const container = {

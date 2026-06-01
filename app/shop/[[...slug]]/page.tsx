@@ -13,6 +13,26 @@ const improveCategoryText = (text: string): string => {
   return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
+const categorySlugToName: Record<string, string> = {
+  smartphones: "Smartphones",
+  "smart-phones": "Smartphones",
+  laptops: "Laptops",
+  tablets: "Tablets",
+  audio: "Audio",
+  earbuds: "Audio",
+  headphones: "Audio",
+  cameras: "Cameras",
+  "smart-watches": "Smart Watches",
+  watches: "Smart Watches",
+  gaming: "Gaming",
+  accessories: "Accessories",
+  mouses: "Accessories",
+  computers: "Computers",
+  printers: "Printers",
+};
+
+const getCategoryName = (slug: string) => categorySlugToName[slug] || improveCategoryText(slug);
+
 interface Product {
   id: string;
   slug: string;
@@ -33,9 +53,14 @@ const ShopPage = async ({ params, searchParams }: {
 }) => {
   const awaitedParams = await params;
   const awaitedSearchParams = await searchParams;
+  const getSearchParam = (value: string | string[] | undefined) =>
+    Array.isArray(value) ? value[0] : value;
+  const categorySlug =
+    getSearchParam(awaitedSearchParams?.category) ||
+    (awaitedParams?.slug && awaitedParams?.slug[0]?.length > 0 ? awaitedParams.slug[0] : "");
   
-  const categoryName = awaitedParams?.slug && awaitedParams?.slug[0]?.length > 0
-    ? sanitize(improveCategoryText(awaitedParams?.slug[0]))
+  const categoryName = categorySlug
+    ? sanitize(getCategoryName(categorySlug))
     : "All Products";
   
   // Fetch products server-side
@@ -45,9 +70,6 @@ const ShopPage = async ({ params, searchParams }: {
   let loadErrorStatus: number | undefined;
   
   try {
-    const getSearchParam = (value: string | string[] | undefined) =>
-      Array.isArray(value) ? value[0] : value;
-
     const inStockNum = getSearchParam(awaitedSearchParams?.inStock) === "true" ? 1 : 0;
     const outOfStockNum = getSearchParam(awaitedSearchParams?.outOfStock) === "true" ? 1 : 0;
     const page = getSearchParam(awaitedSearchParams?.page)
@@ -63,7 +85,7 @@ const ShopPage = async ({ params, searchParams }: {
     }
 
     const categoryFilter =
-      awaitedParams?.slug?.length && awaitedParams.slug.length > 0
+      categorySlug
         ? `&filters[category][$equals]=${encodeURIComponent(categoryName)}`
         : "";
 

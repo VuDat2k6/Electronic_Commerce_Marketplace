@@ -24,17 +24,18 @@ import { signOut, useSession } from "next-auth/react";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useProductStore } from "@/app/_zustand/store";
 import { useWishlistStore } from "@/app/_zustand/wishlistStore";
+import { clearPersistedSessionStores } from "@/lib/clientSessionStores";
 import { clearBackendTokenCache } from "@/lib/api";
 
 const categories = [
-  { label: "Smartphones", href: "/shop/smartphones" },
-  { label: "Laptops", href: "/shop/laptops" },
-  { label: "Tablets", href: "/shop/tablets" },
-  { label: "Audio", href: "/shop/audio" },
-  { label: "Cameras", href: "/shop/cameras" },
-  { label: "Smart Watches", href: "/shop/smart-watches" },
-  { label: "Gaming", href: "/shop/gaming" },
-  { label: "Accessories", href: "/shop/accessories" },
+  { label: "Smartphones", href: "/shop?category=smartphones" },
+  { label: "Laptops", href: "/shop?category=laptops" },
+  { label: "Tablets", href: "/shop?category=tablets" },
+  { label: "Audio", href: "/shop?category=audio" },
+  { label: "Cameras", href: "/shop?category=cameras" },
+  { label: "Smart Watches", href: "/shop?category=smart-watches" },
+  { label: "Gaming", href: "/shop?category=gaming" },
+  { label: "Accessories", href: "/shop?category=accessories" },
 ];
 
 export function Header() {
@@ -154,6 +155,7 @@ export function Header() {
 
   const handleSignOut = useCallback(async () => {
     clearBackendTokenCache();
+    clearPersistedSessionStores();
     await signOut({ redirect: false, callbackUrl: "/" });
     window.location.replace("/");
   }, []);
@@ -303,7 +305,7 @@ export function Header() {
                       </AccountLink>
                       {accountHref !== "/account/orders" && (
                         <AccountLink href="/account/orders" icon={PackageCheck} onClick={() => setTimeout(() => setIsAccountOpen(false), 150)}>
-                          My purchases
+                          My orders
                         </AccountLink>
                       )}
                       <AccountLink href="/notifications" icon={Bell} onClick={() => setTimeout(() => setIsAccountOpen(false), 150)}>
@@ -417,6 +419,16 @@ export function Header() {
                       <UserCircle className="h-4 w-4" />
                       {accountLabel}
                     </Link>
+                    {accountHref !== "/account/orders" && (
+                      <Link
+                        href="/account/orders"
+                        onClick={() => setTimeout(() => setIsMobileMenuOpen(false), 150)}
+                        className="flex items-center justify-center gap-2 rounded-lg bg-white py-2.5 text-sm font-medium text-gray-900"
+                      >
+                        <PackageCheck className="h-4 w-4" />
+                        My orders
+                      </Link>
+                    )}
                     {accountRole === "buyer" && (
                       <Link
                         href="/become-seller"

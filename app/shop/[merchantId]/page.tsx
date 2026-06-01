@@ -3,6 +3,7 @@ import { getMerchantShop } from "../../../server/services/order.service";
 import Link from "next/link";
 import Image from "next/image";
 import { Store, Package, ArrowLeft } from "lucide-react";
+import { redirect } from "next/navigation";
 
 interface ShopPageProps {
   params: Promise<{
@@ -10,8 +11,31 @@ interface ShopPageProps {
   }>;
 }
 
+const categoryRedirects: Record<string, string> = {
+  smartphones: "smartphones",
+  "smart-phones": "smartphones",
+  laptops: "laptops",
+  tablets: "tablets",
+  audio: "audio",
+  earbuds: "audio",
+  headphones: "audio",
+  cameras: "cameras",
+  "smart-watches": "smart-watches",
+  watches: "smart-watches",
+  gaming: "gaming",
+  accessories: "accessories",
+  mouses: "accessories",
+  computers: "computers",
+  printers: "printers",
+};
+
 export default async function ShopPage({ params }: ShopPageProps) {
   const { merchantId } = await params;
+
+  if (categoryRedirects[merchantId]) {
+    redirect(`/shop?category=${categoryRedirects[merchantId]}`);
+  }
+
   let merchantName = "Unknown Shop";
   let merchantDescription = "";
   let products: Array<{

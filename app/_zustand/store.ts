@@ -76,6 +76,7 @@ export type Actions = {
   addToCart: (newProduct: ProductInCart) => void;                                    // Add product to cart
   removeFromCart: (id: string) => void;                                              // Remove product from cart
   updateCartAmount: (id: string, quantity: number) => void;                          // Update product quantity
+  setCart: (products: ProductInCart[]) => void;                                      // Replace cart with a trusted source
   clearCart: () => void;                                                              // Clear all products
   getCartGroups: () => CartGroup[];                                                   // Get products grouped by merchant
   getCartTotal: () => { subtotal: number; shipping: number; tax: number; grandTotal: number };  // Calculate final totals
@@ -247,6 +248,25 @@ export const useProductStore = create<State & Actions>()(
             allQuantity: quantity,
             total,
           };
+        });
+      },
+
+      /**
+       * Replace the complete cart from a trusted source such as account API hydration.
+       */
+      setCart: (products) => {
+        const normalizedProducts = products
+          .filter((product) => product.id && product.amount > 0)
+          .map((product) => ({
+            ...product,
+            amount: Math.max(1, Math.floor(product.amount)),
+          }));
+        const { quantity, total } = calculateTotals(normalizedProducts);
+
+        set({
+          products: normalizedProducts,
+          allQuantity: quantity,
+          total,
         });
       },
 

@@ -433,6 +433,7 @@ async function validateVoucherBusiness(voucher, orderTotal, cartItems) {
   let discount = 0;
   const normalizedOrderTotal = Number(orderTotal || 0);
   let eligibleTotal = normalizedOrderTotal;
+  const formatVnd = (amount) => `${Number(amount || 0).toLocaleString("vi-VN")} VND`;
 
   // Check if voucher is active
   if (!voucher.isActive) {
@@ -476,6 +477,10 @@ async function validateVoucherBusiness(voucher, orderTotal, cartItems) {
 
   if (voucher.merchantId && voucher.minOrderValue && eligibleTotal < voucher.minOrderValue) {
     errors.push(`Minimum order value of ${voucher.minOrderValue.toLocaleString("vi-VN")} VND required`);
+  }
+
+  if (errors.length > 0 && voucher.maxDiscount) {
+    errors.push(`Maximum discount: ${formatVnd(voucher.maxDiscount)}`);
   }
 
   // Calculate discount if no errors

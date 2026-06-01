@@ -10,6 +10,7 @@ import Footer from "@/components/Footer";
 import Providers from "@/Providers";
 import SessionTimeoutWrapper from "@/components/SessionTimeoutWrapper";
 import ProgressBar from "@/components/ProgressBar";
+import SessionStoreSync from "@/components/SessionStoreSync";
 
 const inter = Inter({ subsets: ["latin"] });
 const montserrat = Montserrat({
@@ -41,6 +42,7 @@ export default async function RootLayout({
         <SessionProvider session={session}>
           <ProgressBar />
           <SessionTimeoutWrapper />
+          <SessionStoreSync />
           <Header />
           <Providers>
             {children}

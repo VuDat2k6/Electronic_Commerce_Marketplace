@@ -206,55 +206,35 @@ const getAllProducts = asyncHandler(async (request, response) => {
   const validatedPage = (page && page > 0) ? page : 1;
 
   if (dividerLocation !== -1) {
-    const queryArray = request.url
-      .substring(dividerLocation + 1, request.url.length)
-      .split("&");
-
-    let filterType;
+    const searchParams = new URLSearchParams(
+      request.url.substring(dividerLocation + 1, request.url.length)
+    );
     let filterArray = [];
 
-    for (let i = 0; i < queryArray.length; i++) {
-      const queryParam = queryArray[i];
-      
-      if (queryParam.includes("filters")) {
-        if (queryParam.includes("price")) filterType = "price";
-        else if (queryParam.includes("rating")) filterType = "rating";
-        else if (queryParam.includes("category")) filterType = "category";
-        else if (queryParam.includes("inStock")) filterType = "inStock";
-        else if (queryParam.includes("outOfStock")) filterType = "outOfStock";
-        else continue;
+    const requestedSort = searchParams.get("sort");
+    if (requestedSort && validateSortValue(requestedSort)) {
+      sortByValue = requestedSort;
+    }
+
+    for (const [key, rawValue] of searchParams.entries()) {
+      const match = key.match(/^filters\[([^\]]+)\]\[\$([^\]]+)\]$/);
+      if (!match) continue;
+
+      const [, filterType, filterOperator] = match;
+      let filterValue;
+
+      if (filterType === "category") {
+        filterValue = rawValue;
+      } else {
+        const numValue = parseInt(rawValue, 10);
+        filterValue = isNaN(numValue) ? null : numValue;
       }
 
-      if (queryParam.includes("sort")) {
-        const extractedSortValue = queryParam.substring(queryParam.indexOf("=") + 1);
-        if (validateSortValue(extractedSortValue)) {
-          sortByValue = extractedSortValue;
-        }
-      }
-
-      if (queryParam.includes("filters") && filterType) {
-        let filterValue;
-        
-        if (filterType === "category") {
-          filterValue = decodeURIComponent(queryParam.substring(queryParam.indexOf("=") + 1).replace(/\+/g, " "));
-        } else {
-          const numValue = parseInt(queryParam.substring(queryParam.indexOf("=") + 1));
-          filterValue = isNaN(numValue) ? null : numValue;
-        }
-
-        const operatorStart = queryParam.indexOf("$") + 1;
-        const operatorEnd = queryParam.indexOf("=") - 1;
-        
-        if (operatorStart > 0 && operatorEnd > operatorStart) {
-          const filterOperator = queryParam.substring(operatorStart, operatorEnd);
-          
-          if (filterValue !== null && filterOperator) {
-            filterArray.push({ filterType, filterOperator, filterValue });
-          }
-        }
+      if (filterValue !== null && filterOperator) {
+        filterArray.push({ filterType, filterOperator, filterValue });
       }
     }
-    
+
     filterObj = buildSafeFilterObject(filterArray);
   }
 

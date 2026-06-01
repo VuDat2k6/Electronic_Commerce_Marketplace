@@ -57,7 +57,7 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
   }, []);
 
   // Check if product is in wishlist
-  const isWishlisted = isInWishlist(product.id);
+  const isWishlisted = isInteractive ? isInWishlist(product.id) : false;
 
   // Calculate discount
   const originalPrice = product.originalPrice || (product.price > 500000 ? product.price * 1.15 : undefined);
@@ -188,7 +188,7 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
             {/* Badges */}
             {showHotBadge && (
               <motion.span
-                className="absolute top-3 left-3 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg z-10"
+                className="absolute left-3 top-14 z-10 rounded-full bg-gradient-to-r from-red-500 to-pink-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg"
                 initial={{ scale: 0, rotate: -180 }}
                 animate={{ scale: 1, rotate: 0 }}
                 transition={{ type: "spring", stiffness: 200 }}
@@ -199,7 +199,7 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
 
             {showNewBadge && (
               <motion.span
-                className="absolute top-3 left-3 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg z-10"
+                className="absolute left-3 top-14 z-10 rounded-full bg-gradient-to-r from-red-500 to-pink-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg"
                 initial={{ scale: 0, rotate: -180 }}
                 animate={{ scale: 1, rotate: 0 }}
                 transition={{ type: "spring", stiffness: 200 }}
@@ -221,9 +221,9 @@ export function ProductItem({ product, index = 0 }: ProductItemProps) {
             {/* Wishlist button */}
             <motion.button
               disabled={actionsDisabled}
-              className={`absolute top-3 right-3 bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg z-10 transition-all duration-200 ${
-                discount > 0 || showHotBadge || showNewBadge ? 'top-16' : ''
-              } ${isWishlisted ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} disabled:cursor-wait`}
+              className={`absolute left-3 top-3 z-10 rounded-full bg-white/90 p-2 shadow-lg backdrop-blur-sm transition-all duration-200 ${
+                isWishlisted ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              } disabled:cursor-wait`}
               whileHover={{ scale: 1.2 }}
               whileTap={{ scale: 0.9 }}
               onClick={handleWishlist}
