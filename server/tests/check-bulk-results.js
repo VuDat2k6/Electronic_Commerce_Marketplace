@@ -1,4 +1,4 @@
-const prisma = require("../utills/db");
+const prisma = require("../utils/db");
 
 async function checkBulkUploadResults() {
   console.log("📊 Checking Bulk Upload Results\n");
@@ -135,7 +135,7 @@ async function checkBulkUploadResults() {
     } else {
       console.log("❌ No bulk upload batches found");
       console.log("\n💡 Upload a CSV file first:");
-      console.log("   1. Go to http://localhost:3000/admin/bulk-upload");
+      console.log("   1. Go to http://localhost:3000/seller/bulk-upload");
       console.log("   2. Upload bulk-upload-example.csv");
       console.log("   3. Run this script again");
     }

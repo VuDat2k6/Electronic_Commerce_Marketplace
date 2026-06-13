@@ -1,11 +1,10 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
-const { asyncHandler, AppError } = require("../utills/errorHandler");
+const prisma = require('../utils/db');
+const { asyncHandler, AppError } = require("../utils/errorHandler");
 
 const createOrderProduct = asyncHandler(async (request, response) => {
   const { subOrderId, productId, quantity } = request.body;
   const parsedQuantity = Number(quantity);
-  
+
   // Validate required fields
   if (!subOrderId) {
     throw new AppError("SubOrder ID is required", 400);
@@ -55,6 +54,126 @@ const createOrderProduct = asyncHandler(async (request, response) => {
   });
 
   return response.status(201).json(orderProduct);
+});
+
+/**
+ * POST /api/order-product/bulk
+ *
+ * Creates multiple order items in a single batch operation
+ * Optimized to avoid N+1 queries - fetches all products in parallel
+ *
+ * Request Body:
+ * - orderId: The customer order ID
+ * - items: Array of { productId, quantity, unitPrice }
+ *
+ * @param {Request} request - Express request with order items data
+ * @param {Response} response - Express response object
+ */
+const bulkCreateOrderProducts = asyncHandler(async (request, response) => {
+  const { orderId, items } = request.body;
+
+  // Validate required fields
+  if (!orderId) {
+    throw new AppError("Order ID is required", 400);
+  }
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new AppError("Items array is required and must not be empty", 400);
+  }
+
+  // Validate each item
+  for (const item of items) {
+    if (!item.productId) {
+      throw new AppError("Product ID is required for each item", 400);
+    }
+    if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+      throw new AppError("Valid quantity is required for each item", 400);
+    }
+  }
+
+  // Check if order exists
+  const existingOrder = await prisma.customer_order.findUnique({
+    where: { id: orderId }
+  });
+
+  if (!existingOrder) {
+    throw new AppError("Order not found", 404);
+  }
+
+  // Fetch all products in parallel to avoid N+1 queries
+  const productIds = items.map(item => item.productId);
+  const products = await prisma.product.findMany({
+    where: { id: { in: productIds } },
+    select: {
+      id: true,
+      title: true,
+      mainImage: true,
+      price: true,
+      merchantId: true,
+      inStock: true,
+      sellerId: true
+    }
+  });
+
+  // Create a map for quick product lookup
+  const productMap = new Map(products.map(p => [p.id, p]));
+
+  // Validate all products exist
+  for (const item of items) {
+    if (!productMap.has(item.productId)) {
+      throw new AppError(`Product not found: ${item.productId}`, 404);
+    }
+  }
+
+  // Fetch merchant/seller info for all products in parallel
+  const merchantIds = [...new Set(products.map(p => p.merchantId).filter(Boolean))];
+  const merchants = merchantIds.length > 0
+    ? await prisma.merchant.findMany({
+        where: { id: { in: merchantIds } },
+        select: { id: true, name: true }
+      })
+    : [];
+  const merchantMap = new Map(merchants.map(m => [m.id, m]));
+
+  // Build order items data
+  const orderItemsData = items.map(item => {
+    const product = productMap.get(item.productId);
+    const merchant = product?.merchantId ? merchantMap.get(product.merchantId) : null;
+
+    return {
+      orderId,
+      productId: item.productId,
+      sellerId: item.sellerId || product?.sellerId || '',
+      quantity: item.quantity,
+      priceAtPurchase: item.unitPrice || product?.price || 0,
+      // Snapshot fields for order history
+      productNameSnapshot: product?.title || '',
+      productImageSnapshot: product?.mainImage || '',
+      unitPriceSnapshot: item.unitPrice || product?.price || 0,
+      merchantIdSnapshot: product?.merchantId || '',
+      merchantNameSnapshot: merchant?.name || 'Unknown Shop'
+    };
+  });
+
+  // Create all order items in a single transaction
+  const createdItems = await prisma.$transaction(
+    orderItemsData.map(itemData =>
+      prisma.order_item.create({ data: itemData })
+    )
+  );
+
+  // Also update stock in the same transaction
+  for (const item of items) {
+    await prisma.product.update({
+      where: { id: item.productId },
+      data: { inStock: { decrement: item.quantity } }
+    });
+  }
+
+  return response.status(201).json({
+    success: true,
+    message: `${createdItems.length} order items created`,
+    items: createdItems
+  });
 });
 
 const updateProductOrder = asyncHandler(async (request, response) => {
@@ -167,7 +286,7 @@ const getAllProductOrders = asyncHandler(async (request, response) => {
           phone: true,
           email: true,
           company: true,
-          adress: true,
+          address: true,
           apartment: true,
           postalCode: true,
           dateTime: true,
@@ -184,10 +303,11 @@ const getAllProductOrders = asyncHandler(async (request, response) => {
   return response.json(subOrders);
 });
 
-module.exports = { 
-  createOrderProduct, 
-  updateProductOrder, 
-  deleteProductOrder, 
+module.exports = {
+  createOrderProduct,
+  bulkCreateOrderProducts,
+  updateProductOrder,
+  deleteProductOrder,
   getProductOrder,
   getAllProductOrders
 };

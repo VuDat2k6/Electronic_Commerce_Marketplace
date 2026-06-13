@@ -1,70 +1,104 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { FaTrash, FaShoppingCart, FaHeart } from "react-icons/fa";
 import { SectionTitle } from "@/components";
 import { useWishlistStore, ProductInWishlist } from "@/app/_zustand/wishlistStore";
+import { useProductStore } from "@/app/_zustand/store";
 import apiClient from "@/lib/api";
 import toast from "react-hot-toast";
+import { useSession } from "next-auth/react";
 
 const WishlistPage = () => {
   const { wishlist, removeFromWishlist, wishQuantity } = useWishlistStore();
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [productDetails, setProductDetails] = useState<Record<string, any>>({});
+  const { data: session } = useSession();
 
   useEffect(() => {
-    if (wishlist.length > 0) {
-      fetchProductDetails();
-    }
-  }, [wishlist]);
+    setMounted(true);
+  }, []);
 
-  const fetchProductDetails = async () => {
+  const fetchProductDetails = useCallback(async () => {
     setLoading(true);
     try {
-      const details: Record<string, any> = {};
-      for (const item of wishlist) {
-        if (item.slug) {
-          const response = await apiClient.get(`/api/slugs/${item.slug}`);
-          if (response.ok) {
-            details[item.id] = await response.json();
-          }
-        }
+      // Use the optimized bulk slugs endpoint
+      const slugs = wishlist.filter(item => item.slug).map(item => item.slug!);
+
+      if (slugs.length === 0) {
+        setProductDetails({});
+        return;
       }
-      setProductDetails(details);
+
+      // Fetch all products in a single request using the optimized bulk endpoint
+      const response = await apiClient.get(`/api/slugs/bulk?slugs=${slugs.join(",")}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        // Build lookup map from response
+        const details: Record<string, any> = {};
+        const products = data.products || [];
+        for (const product of products) {
+          details[product.id] = product;
+        }
+        setProductDetails(details);
+      } else {
+        // Fallback: try individual requests in parallel (only if bulk fails)
+        const results = await Promise.allSettled(
+          wishlist
+            .filter(item => item.slug)
+            .map(item =>
+              apiClient.get(`/api/slugs/${item.slug}`).then(res => res.json())
+            )
+        );
+        const details: Record<string, any> = {};
+        results.forEach((result, index) => {
+          if (result.status === "fulfilled") {
+            const item = wishlist.filter(w => w.slug)[index];
+            if (item) details[item.id] = result.value;
+          }
+        });
+        setProductDetails(details);
+      }
     } catch (error) {
       console.error("Error fetching product details:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [wishlist]);
+
+  useEffect(() => {
+    if (wishlist.length > 0) {
+      fetchProductDetails();
+    }
+  }, [wishlist, fetchProductDetails]);
 
   const handleRemove = (id: string) => {
     removeFromWishlist(id);
     toast.success("Removed from wishlist");
   };
 
-  const handleAddToCart = async (product: ProductInWishlist) => {
+  const { addToCart } = useProductStore();
+
+  const handleAddToCart = async (product: ProductInWishlist, productDetail?: any) => {
+    if (!session?.user) {
+      toast.error("Please login to add to cart");
+      return;
+    }
     try {
-      const cart = JSON.parse(localStorage.getItem("cart") || "[]");
-      const existingIndex = cart.findIndex((item: any) => item.id === product.id);
-      
-      if (existingIndex >= 0) {
-        cart[existingIndex].quantity += 1;
-      } else {
-        cart.push({
-          id: product.id,
-          title: product.title,
-          price: product.price,
-          image: product.image,
-          slug: product.slug,
-          quantity: 1,
-        });
-      }
-      
-      localStorage.setItem("cart", JSON.stringify(cart));
-      window.dispatchEvent(new Event("cartUpdated"));
+      addToCart({
+        id: product.id,
+        title: product.title,
+        price: product.price,
+        image: product.image,
+        slug: product.slug,
+        amount: 1,
+        sellerId: product.sellerId || productDetail?.sellerId,
+        sellerName: product.sellerName || productDetail?.seller?.shopName,
+      });
       toast.success("Added to cart");
     } catch (error) {
       console.error("Error adding to cart:", error);
@@ -73,8 +107,23 @@ const WishlistPage = () => {
   };
 
   const formatPrice = (price: number) => {
-    return (price / 100).toFixed(2);
+    return price.toLocaleString('vi-VN') + '₫';
   };
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <SectionTitle title="My Wishlist" path="Home | Wishlist" />
+        <div className="mx-auto max-w-6xl px-4 py-8">
+          <div className="mb-6 h-8 w-52 animate-pulse rounded-lg bg-gray-200" />
+          <div className="overflow-hidden rounded-lg bg-white shadow-sm">
+            <div className="h-32 animate-pulse border-b border-gray-100 bg-gray-100" />
+            <div className="h-32 animate-pulse bg-gray-100" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (wishQuantity === 0) {
     return (
@@ -168,12 +217,12 @@ const WishlistPage = () => {
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <p className="text-xl font-bold text-gray-900">
-                          ${formatPrice(finalPrice)}
+                          {formatPrice(finalPrice)}
                         </p>
                       </div>
 
                       <button
-                        onClick={() => handleAddToCart(item)}
+                        onClick={() => handleAddToCart(item, productDetail)}
                         className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                       >
                         <FaShoppingCart className="w-4 h-4" />

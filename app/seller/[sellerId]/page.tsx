@@ -4,8 +4,9 @@ import { useParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import apiClient from "@/lib/api";
-import { useCartStore } from "@/app/_zustand/store";
+import { useProductStore } from "@/app/_zustand/store";
 import toast from "react-hot-toast";
+import { useSession } from "next-auth/react";
 
 interface Seller {
   id: string;
@@ -34,7 +35,8 @@ const SellerShopPage = () => {
   const [seller, setSeller] = useState<Seller | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { addToCart } = useCartStore();
+  const { addToCart } = useProductStore();
+  const { data: session } = useSession();
 
   useEffect(() => {
     const fetchSeller = async () => {
@@ -46,12 +48,12 @@ const SellerShopPage = () => {
           const data = await res.json();
           setSeller(data);
         } else if (res.status === 404) {
-          setError("Cửa hàng không tồn tại");
+          setError("Shop not found");
         } else {
-          setError("Lỗi khi tải cửa hàng");
+          setError("Error loading shop");
         }
       } catch {
-        setError("Lỗi kết nối");
+        setError("Connection error");
       } finally {
         setLoading(false);
       }
@@ -63,6 +65,11 @@ const SellerShopPage = () => {
   }, [sellerId]);
 
   const handleAddToCart = (product: Product) => {
+    if (!session?.user) {
+      toast.error("Please login to add to cart");
+      return;
+    }
+
     addToCart({
       id: product.id,
       title: product.title,
@@ -74,7 +81,7 @@ const SellerShopPage = () => {
       slug: product.slug,
       maxStock: product.inStock,
     });
-    toast.success("Đã thêm vào giỏ hàng!");
+    toast.success("Added to cart!");
   };
 
   const formatPrice = (cents: number) => {
@@ -89,7 +96,7 @@ const SellerShopPage = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600">Đang tải cửa hàng...</p>
+          <p className="mt-4 text-gray-600">Loading shop...</p>
         </div>
       </div>
     );
@@ -99,10 +106,10 @@ const SellerShopPage = () => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">Cửa hàng không tồn tại</h1>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Shop Not Found</h1>
           <p className="text-gray-600 mb-4">{error}</p>
           <Link href="/" className="text-blue-500 hover:underline">
-            ← Quay về trang chủ
+            ← Back to Home
           </Link>
         </div>
       </div>
@@ -113,10 +120,10 @@ const SellerShopPage = () => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-2">Cửa hàng đã bị tạm ngưng</h1>
-          <p className="text-gray-600 mb-4">Cửa hàng này hiện không hoạt động.</p>
+          <h1 className="text-2xl font-bold text-red-600 mb-2">Shop Has Been Suspended</h1>
+          <p className="text-gray-600 mb-4">This shop is currently not active.</p>
           <Link href="/" className="text-blue-500 hover:underline">
-            ← Quay về trang chủ
+            ← Back to Home
           </Link>
         </div>
       </div>
@@ -135,9 +142,9 @@ const SellerShopPage = () => {
               </span>
             </div>
             <div>
-              <h1 className="text-3xl font-bold">{seller.shopName || "Cửa hàng"}</h1>
+              <h1 className="text-3xl font-bold">{seller.shopName || "Shop"}</h1>
               <p className="text-green-100 mt-1">
-                {seller.shopDescription || "Cửa hàng uy tín - Chất lượng hàng đầu"}
+                {seller.shopDescription || "Trusted shop - Top quality products"}
               </p>
               <div className="flex gap-4 mt-3 text-sm text-green-100">
                 {seller.shopPhone && (
@@ -156,14 +163,14 @@ const SellerShopPage = () => {
           <div className="mt-6 flex gap-4">
             <div className="bg-white/20 rounded-lg px-4 py-2 text-center">
               <p className="text-2xl font-bold">{seller.products?.length || 0}</p>
-              <p className="text-sm text-green-100">Sản phẩm</p>
+              <p className="text-sm text-green-100">Products</p>
             </div>
             <div className="bg-white/20 rounded-lg px-4 py-2 text-center">
               <p className="text-2xl font-bold">
                 {seller.shopStatus === "ACTIVE" ? "✓" : "○"}
               </p>
               <p className="text-sm text-green-100">
-                {seller.shopStatus === "ACTIVE" ? "Đang hoạt động" : "Đang chờ duyệt"}
+                {seller.shopStatus === "ACTIVE" ? "Active" : "Pending Approval"}
               </p>
             </div>
           </div>
@@ -172,7 +179,7 @@ const SellerShopPage = () => {
 
       {/* Products Grid */}
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <h2 className="text-xl font-bold mb-6">Sản phẩm của cửa hàng</h2>
+        <h2 className="text-xl font-bold mb-6">Shop Products</h2>
 
         {seller.products && seller.products.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -192,7 +199,7 @@ const SellerShopPage = () => {
                     {product.inStock === 0 && (
                       <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                         <span className="bg-red-500 text-white px-3 py-1 rounded-full text-sm">
-                          Hết hàng
+                          Out of stock
                         </span>
                       </div>
                     )}
@@ -221,7 +228,7 @@ const SellerShopPage = () => {
                         : "bg-green-600 text-white hover:bg-green-700"
                     }`}
                   >
-                    {product.inStock === 0 ? "Hết hàng" : "Thêm vào giỏ"}
+                    {product.inStock === 0 ? "Out of stock" : "Add to Cart"}
                   </button>
                 </div>
               </div>
@@ -229,7 +236,7 @@ const SellerShopPage = () => {
           </div>
         ) : (
           <div className="text-center py-12 bg-white rounded-lg">
-            <p className="text-gray-500">Cửa hàng chưa có sản phẩm nào.</p>
+            <p className="text-gray-500">This shop has no products yet.</p>
           </div>
         )}
       </div>

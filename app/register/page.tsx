@@ -1,249 +1,352 @@
+// RegisterPage - Modern design with gradient theme
 "use client";
-import { CustomButton, SectionTitle } from "@/components";
 import { useSession } from "next-auth/react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { Eye, EyeOff, Loader2, Check } from "lucide-react";
+import { motion } from "framer-motion";
 
 const RegisterPage = () => {
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    lastname: "",
+    email: "",
+    password: "",
+    confirmpassword: "",
+    terms: false,
+  });
   const router = useRouter();
   const { data: session, status: sessionStatus } = useSession();
 
   useEffect(() => {
-    // chechking if user has already registered redirect to home page
     if (sessionStatus === "authenticated") {
       router.replace("/");
     }
   }, [sessionStatus, router]);
 
-  const isValidEmail = (email: string) => {
-    const emailRegex = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
-    return emailRegex.test(email);
+  const validateField = (name: string, value: string | boolean): string | null => {
+    switch (name) {
+      case "name":
+        if (!String(value).trim()) return "First name is required";
+        if (String(value).trim().length < 2) return "First name must be at least 2 characters";
+        return null;
+      case "lastname":
+        if (!String(value).trim()) return "Last name is required";
+        if (String(value).trim().length < 2) return "Last name must be at least 2 characters";
+        return null;
+      case "email":
+        if (!String(value).trim()) return "Email is required";
+        const emailRegex = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+        if (!emailRegex.test(String(value))) return "Please enter a valid email";
+        return null;
+      case "password":
+        if (!value) return "Password is required";
+        if (String(value).length < 8) return "Password must be at least 8 characters";
+        return null;
+      case "confirmpassword":
+        if (value !== formData.password) return "Passwords do not match";
+        return null;
+      case "terms":
+        if (!value) return "You must accept the terms";
+        return null;
+      default:
+        return null;
+    }
   };
-  
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    const newValue = type === "checkbox" ? checked : value;
+    setFormData((prev) => ({ ...prev, [name]: newValue }));
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    const fieldValue = type === "checkbox" ? checked : value;
+    const fieldError = validateField(name, fieldValue);
+    if (fieldError) {
+      setFieldErrors((prev) => ({ ...prev, [name]: fieldError }));
+    }
+  };
+
+  const getPasswordStrength = (password: string): { level: number; label: string; color: string } => {
+    if (password.length === 0) return { level: 0, label: "", color: "" };
+    if (password.length < 8) return { level: 1, label: "Too short", color: "bg-red-500" };
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (password.length >= 12) strength++;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
+    if (/\d/.test(password)) strength++;
+    if (/[^a-zA-Z0-9]/.test(password)) strength++;
+    if (strength <= 2) return { level: 2, label: "Weak", color: "bg-red-500" };
+    if (strength <= 3) return { level: 3, label: "Fair", color: "bg-yellow-500" };
+    if (strength <= 4) return { level: 4, label: "Good", color: "bg-green-500" };
+    return { level: 5, label: "Strong", color: "bg-green-600" };
+  };
+
+  const passwordStrength = getPasswordStrength(formData.password);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-
-    const email = String(formData.get("email") || "");
-    const password = String(formData.get("password") || "");
-    const confirmPassword = String(formData.get("confirmpassword") || "");
-    const acceptedTerms = formData.get("remember-me");
-
-    if (!acceptedTerms) {
-      setError("You must accept our terms and privacy policy");
-      toast.error("You must accept our terms and privacy policy");
+    const errors: Record<string, string> = {};
+    Object.entries(formData).forEach(([name, value]) => {
+      const error = validateField(name, value);
+      if (error) errors[name] = error;
+    });
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError("Please fix the errors below");
       return;
     }
 
-    if (!isValidEmail(email)) {
-      setError("Email is invalid");
-      toast.error("Email is invalid");
-      return;
-    }
-
-    if (!password || password.length < 8) {
-      setError("Password must be 8 characters long");
-      toast.error("Password must be 8 characters long");
-      return;
-    }
-
-    if (confirmPassword !== password) {
-      setError("Passwords are not equal");
-      toast.error("Passwords are not equal");
-      return;
-    }
+    setIsSubmitting(true);
+    setError("");
 
     try {
-      // sending API request for registering user
       const res = await fetch("/api/register", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
-          password,
+          email: formData.email,
+          password: formData.password,
         }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        setError("");
-        toast.success("Registration successful");
-        router.push("/login");
+        toast.success("Registration successful! Please log in.");
+        setTimeout(() => window.location.href = "/login", 1000);
       } else {
-        // Handle different types of errors
         if (data.details && Array.isArray(data.details)) {
-          // Validation errors
-          const errorMessage = data.details.map((err: any) => err.message).join(", ");
+          const errorMessage = data.details.map((err: { message: string }) => err.message).join(", ");
           setError(errorMessage);
           toast.error(errorMessage);
         } else if (data.error) {
-          // General errors
           setError(data.error);
           toast.error(data.error);
         } else {
-          setError("Registration failed");
+          setError("Registration failed. Please try again.");
           toast.error("Registration failed");
         }
       }
-    } catch (error) {
-      toast.error("Error, try again");
-      setError("Error, try again");
-      console.log(error);
+    } catch {
+      toast.error("An unexpected error occurred.");
+      setError("An unexpected error occurred");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   if (sessionStatus === "loading") {
-    return <h1>Loading...</h1>;
-  }
-  return (
-    <div className="bg-white">
-      <SectionTitle title="Register" path="Home | Register" />
-      <div className="flex min-h-full flex-1 flex-col justify-center py-12 sm:px-6 lg:px-8 bg-white">
-        <div className="flex justify-center flex-col items-center">
-          <h2 className="mt-6 text-center text-2xl leading-9 tracking-tight text-gray-900">
-            Sign up on our website
-          </h2>
-        </div>
-
-        <div className="mt-5 sm:mx-auto sm:w-full sm:max-w-[480px]">
-          <div className="bg-white px-6 py-12 shadow sm:rounded-lg sm:px-12">
-            <form className="space-y-6" onSubmit={handleSubmit}>
-              <div>
-                <label
-                  htmlFor="name"
-                  className="block text-sm font-medium leading-6 text-gray-900"
-                >
-                  Name
-                </label>
-                <div className="mt-2">
-                  <input
-                    id="name"
-                    name="name"
-                    type="text"
-                    required
-                    className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="lastname"
-                  className="block text-sm font-medium leading-6 text-gray-900"
-                >
-                  Lastname
-                </label>
-                <div className="mt-2">
-                  <input
-                    id="lastname"
-                    name="lastname"
-                    type="text"
-                    required
-                    className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="email"
-                  className="block text-sm font-medium leading-6 text-gray-900"
-                >
-                  Email address
-                </label>
-                <div className="mt-2">
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="password"
-                  className="block text-sm font-medium leading-6 text-gray-900"
-                >
-                  Password
-                </label>
-                <div className="mt-2">
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                    className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="confirmpassword"
-                  className="block text-sm font-medium leading-6 text-gray-900"
-                >
-                  Confirm password
-                </label>
-                <div className="mt-2">
-                  <input
-                    id="confirmpassword"
-                    name="confirmpassword"
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                    className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <input
-                    id="remember-me"
-                    name="remember-me"
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
-                  />
-                  <label
-                    htmlFor="remember-me"
-                    className="ml-3 block text-sm leading-6 text-gray-900"
-                  >
-                    Accept our terms and privacy policy
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <CustomButton
-                  buttonType="submit"
-                  text="Sign up"
-                  paddingX={3}
-                  paddingY={1.5}
-                  customWidth="full"
-                  textSize="sm"
-                />
-
-                <p className="text-red-600 text-center text-[16px] my-4">
-                  {error && error}
-                </p>
-              </div>
-            </form>
-          </div>
-        </div>
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full"
+        />
       </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 py-12 px-4">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md"
+      >
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2">Create your account</h1>
+          <p className="text-white/80">Join us to start shopping</p>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-2xl p-8">
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600"
+            >
+              {error}
+            </motion.div>
+          )}
+
+          <form className="space-y-5" onSubmit={handleSubmit}>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1.5">First Name</label>
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  value={formData.name}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  disabled={isSubmitting}
+                  className={`block w-full rounded-xl border px-4 py-3 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 ${
+                    fieldErrors.name ? "border-red-300 focus:border-red-500 focus:ring-red-500/30" : "border-gray-200 focus:border-purple-500 focus:ring-purple-500/30"
+                  } disabled:bg-gray-50`}
+                  placeholder="John"
+                />
+                {fieldErrors.name && <p className="mt-1 text-sm text-red-600">{fieldErrors.name}</p>}
+              </div>
+              <div>
+                <label htmlFor="lastname" className="block text-sm font-medium text-gray-700 mb-1.5">Last Name</label>
+                <input
+                  id="lastname"
+                  name="lastname"
+                  type="text"
+                  value={formData.lastname}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  disabled={isSubmitting}
+                  className={`block w-full rounded-xl border px-4 py-3 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 ${
+                    fieldErrors.lastname ? "border-red-300 focus:border-red-500 focus:ring-red-500/30" : "border-gray-200 focus:border-purple-500 focus:ring-purple-500/30"
+                  } disabled:bg-gray-50`}
+                  placeholder="Doe"
+                />
+                {fieldErrors.lastname && <p className="mt-1 text-sm text-red-600">{fieldErrors.lastname}</p>}
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                value={formData.email}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                disabled={isSubmitting}
+                className={`block w-full rounded-xl border px-4 py-3 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 ${
+                  fieldErrors.email ? "border-red-300 focus:border-red-500 focus:ring-red-500/30" : "border-gray-200 focus:border-purple-500 focus:ring-purple-500/30"
+                } disabled:bg-gray-50`}
+                placeholder="you@example.com"
+              />
+              {fieldErrors.email && <p className="mt-1 text-sm text-red-600">{fieldErrors.email}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+              <div className="relative">
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  disabled={isSubmitting}
+                  className={`block w-full rounded-xl border px-4 py-3 pr-12 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 ${
+                    fieldErrors.password ? "border-red-300 focus:border-red-500 focus:ring-red-500/30" : "border-gray-200 focus:border-purple-500 focus:ring-purple-500/30"
+                  } disabled:bg-gray-50`}
+                  placeholder="••••••••"
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 flex items-center pr-4 text-gray-400 hover:text-gray-600">
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+              {formData.password && (
+                <div className="mt-2">
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i <= passwordStrength.level ? passwordStrength.color : "bg-gray-200"}`} />
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">{passwordStrength.label}</p>
+                </div>
+              )}
+              {fieldErrors.password && <p className="mt-1 text-sm text-red-600">{fieldErrors.password}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="confirmpassword" className="block text-sm font-medium text-gray-700 mb-1.5">Confirm Password</label>
+              <div className="relative">
+                <input
+                  id="confirmpassword"
+                  name="confirmpassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={formData.confirmpassword}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  disabled={isSubmitting}
+                  className={`block w-full rounded-xl border px-4 py-3 pr-12 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 ${
+                    fieldErrors.confirmpassword ? "border-red-300 focus:border-red-500 focus:ring-red-500/30" : "border-gray-200 focus:border-purple-500 focus:ring-purple-500/30"
+                  } disabled:bg-gray-50`}
+                  placeholder="••••••••"
+                />
+                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute inset-y-0 right-0 flex items-center pr-4 text-gray-400 hover:text-gray-600">
+                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+              {formData.confirmpassword && !fieldErrors.confirmpassword && (
+                <p className="mt-1 text-sm text-green-600 flex items-center gap-1">
+                  <Check className="w-4 h-4" /> Passwords match
+                </p>
+              )}
+              {fieldErrors.confirmpassword && <p className="mt-1 text-sm text-red-600">{fieldErrors.confirmpassword}</p>}
+            </div>
+
+            <div className="flex items-start gap-3">
+              <input
+                id="terms"
+                name="terms"
+                type="checkbox"
+                checked={formData.terms}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                disabled={isSubmitting}
+                className="mt-1 w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+              />
+              <label htmlFor="terms" className="text-sm text-gray-600">
+                I agree to the <a href="#" className="text-purple-600 hover:underline">Terms</a> and <a href="#" className="text-purple-600 hover:underline">Privacy Policy</a>
+              </label>
+            </div>
+            {fieldErrors.terms && <p className="text-sm text-red-600 -mt-3">{fieldErrors.terms}</p>}
+
+            <motion.button
+              type="submit"
+              disabled={isSubmitting}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 px-4 py-3.5 text-sm font-semibold text-white hover:from-purple-700 hover:to-pink-600 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Creating account...
+                </>
+              ) : (
+                "Create account"
+              )}
+            </motion.button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-gray-600">
+            Already have an account?{" "}
+            <a href="/login" className="font-semibold text-purple-600 hover:text-purple-700">Sign in</a>
+          </p>
+        </div>
+      </motion.div>
     </div>
   );
 };

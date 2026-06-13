@@ -13,9 +13,8 @@
  * @module controllers/category
  */
 
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
-const { asyncHandler, AppError } = require("../utills/errorHandler");
+const prisma = require("../utils/db");
+const { asyncHandler, AppError } = require("../utils/errorHandler");
 
 // ============================================================
 // CATEGORY CONTROLLER FUNCTIONS

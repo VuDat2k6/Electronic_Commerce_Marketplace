@@ -32,6 +32,8 @@ export type ProductInWishlist = {
   price: number;           // Product price (in cents)
   image: string;           // Product image URL
   slug?: string;           // URL-friendly product identifier
+  sellerId?: string;       // Shop owner for cart conversion
+  sellerName?: string;     // Display name for cart grouping
   stockAvailabillity?: number;  // Available stock (note: typo in original)
 };
 

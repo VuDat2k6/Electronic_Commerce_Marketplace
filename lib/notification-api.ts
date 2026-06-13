@@ -39,11 +39,11 @@ export const notificationApi = {
    */
   async getUnreadCount(userId: string): Promise<{ unreadCount: number }> {
     const response = await apiClient.get(`/api/notifications/${userId}/unread-count`);
-    
+
     if (!response.ok) {
       throw new Error(`Failed to fetch unread count: ${response.statusText}`);
     }
-    
+
     return response.json();
   },
 

@@ -29,6 +29,7 @@ export type State = {
 export type Actions = {
   incrementPage: () => void;  // Go to next page
   decrementPage: () => void;  // Go to previous page
+  setPage: (page: number) => void; // Set specific page
 };
 
 // ============================================================
@@ -77,5 +78,12 @@ export const usePaginationStore = create<State & Actions>((set) => ({
       }
       return { page: 1 };
     });
+  },
+
+  /**
+   * Set specific page number
+   */
+  setPage: (page: number) => {
+    set({ page });
   },
 }));

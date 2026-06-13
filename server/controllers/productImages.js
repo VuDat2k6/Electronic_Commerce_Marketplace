@@ -1,6 +1,36 @@
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const prisma = require("../utils/db");
 
+async function canMutateProductImages(request, response, productID) {
+  if (!productID) {
+    response.status(400).json({ error: "Product ID is required" });
+    return false;
+  }
+
+  const product = await prisma.product.findUnique({
+    where: { id: String(productID) },
+    select: { sellerId: true },
+  });
+
+  if (!product) {
+    response.status(404).json({ error: "Product not found" });
+    return false;
+  }
+
+  if (product.sellerId !== request.user.id) {
+    response.status(403).json({ error: "You can only manage images for your own products" });
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Fetches and sends all image records for the product identified by `request.params.id`.
+ *
+ * Sends a 404 response with `{ error: "Images not found" }` when no images exist for the product; otherwise sends the images array as JSON.
+ * @param {import('express').Request} request - Express request; expects `request.params.id` to contain the product ID.
+ * @param {import('express').Response} response - Express response used to send the result.
+ */
 async function getSingleProductImages(request, response) {
   const { id } = request.params;
   const images = await prisma.image.findMany({
@@ -17,9 +47,11 @@ async function getSingleProductImages(request, response) {
 async function createImage(request, response) {
   try {
     const { productID, image } = request.body;
+    if (!(await canMutateProductImages(request, response, productID))) return;
+
     const createImage = await prisma.image.create({
       data: {
-        productID,
+        productID: String(productID),
         image,
       },
     });
@@ -32,31 +64,33 @@ async function createImage(request, response) {
 
 async function updateImage(request, response) {
   try {
-    const { id } = request.params; // Getting product id from params
+    const { id } = request.params;
     const { productID, image } = request.body;
 
-    // Checking whether photo exists for the given product id
+    if (!(await canMutateProductImages(request, response, id))) return;
+    if (productID && String(productID) !== String(id)) {
+      return response.status(400).json({ error: "Product ID cannot be changed for an image" });
+    }
+
     const existingImage = await prisma.image.findFirst({
       where: {
-        productID: id, // Finding photo with a product id
+        productID: String(id),
       },
     });
 
-    // if photo doesn't exist, return coresponding status code
     if (!existingImage) {
       return response
         .status(404)
         .json({ error: "Image not found for the provided productID" });
     }
 
-    // Updating photo using coresponding imageID
     const updatedImage = await prisma.image.update({
       where: {
-        imageID: existingImage.imageID, // Using imageID of the found existing image
+        imageID: existingImage.imageID,
       },
       data: {
-        productID: productID,
-        image: image,
+        productID: String(id),
+        image,
       },
     });
 
@@ -70,9 +104,11 @@ async function updateImage(request, response) {
 async function deleteImage(request, response) {
   try {
     const { id } = request.params;
+    if (!(await canMutateProductImages(request, response, id))) return;
+
     await prisma.image.deleteMany({
       where: {
-        productID: String(id), // Converting id to string
+        productID: String(id),
       },
     });
     return response.status(204).send();

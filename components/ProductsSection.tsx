@@ -1,56 +1,242 @@
-// *********************
-// Role of the component: products section intended to be on the home page
-// Name of the component: ProductsSection.tsx
-// Developer: Vu Dat
-// Version: 1.0
-// Component call: <ProductsSection slug={slug} />
-// Input parameters: no input parameters
-// Output: products grid
-// *********************
+// ProductsSection - Premium UX with skeleton loading
+"use client";
 
-import React from "react";
-import ProductItem from "./ProductItem";
-import Heading from "./Heading";
-import apiClient from "@/lib/api";
+import { ArrowRight } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { ProductItem } from "./ProductItem";
+import StorefrontLoadError from "./StorefrontLoadError";
+import Link from 'next/link';
+import { products, Product } from '@/lib/demo-data';
 
-const ProductsSection = async () => {
-  let products = [];
-  
-  try {
-    // sending API request for getting all products
-    const data = await apiClient.get("/api/products");
-    
-    if (!data.ok) {
-      console.error('Failed to fetch products:', data.statusText);
-      products = [];
-    } else {
-      const result = await data.json();
-      // Ensure products is an array
-      products = Array.isArray(result) ? result : [];
+const container = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08
     }
-  } catch (error) {
-    console.error('Error fetching products:', error);
-    products = [];
   }
+};
 
+const item = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0 }
+};
+
+// Skeleton loader component
+function ProductSkeleton() {
   return (
-    <div className="bg-blue-500 border-t-4 border-white">
-      <div className="max-w-screen-2xl mx-auto pt-20">
-        <Heading title="FEATURED PRODUCTS" />
-        <div className="grid grid-cols-4 justify-items-center max-w-screen-2xl mx-auto py-10 gap-x-2 px-10 gap-y-8 max-xl:grid-cols-3 max-md:grid-cols-2 max-sm:grid-cols-1">
-          {products.length > 0 ? (
-            products.map((product: any) => (
-              <ProductItem key={product.id} product={product} color="white" />
-            ))
-          ) : (
-            <div className="col-span-full text-center text-white py-10">
-              <p>No products available at the moment.</p>
-            </div>
-          )}
+    <div className="bg-white rounded-2xl overflow-hidden shadow-md animate-pulse">
+      {/* Image skeleton */}
+      <div className="relative aspect-square bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200" />
+
+      {/* Content skeleton */}
+      <div className="p-5 space-y-3">
+        {/* Title skeleton */}
+        <div className="h-5 bg-gray-200 rounded w-3/4" />
+        <div className="h-5 bg-gray-200 rounded w-1/2" />
+
+        {/* Rating skeleton */}
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="w-4 h-4 bg-gray-200 rounded" />
+            ))}
+          </div>
+          <div className="h-4 bg-gray-200 rounded w-12" />
         </div>
+
+        {/* Price skeleton */}
+        <div className="flex items-baseline gap-2">
+          <div className="h-8 bg-gray-200 rounded w-28" />
+          <div className="h-4 bg-gray-200 rounded w-16" />
+        </div>
+
+        {/* Button skeleton */}
+        <div className="h-12 bg-gradient-to-r from-purple-200 to-pink-200 rounded-xl mt-2" />
       </div>
     </div>
   );
-};
+}
+
+interface ProductsSectionProps {
+  products?: Array<{
+    id: string;
+    slug: string;
+    title: string;
+    price: number;
+    originalPrice?: number;
+    mainImage: string;
+    rating?: number;
+    reviews?: number;
+    inStock?: number;
+    badge?: string;
+    description?: string;
+    sellerId?: string;
+    merchantId?: string;
+  }>;
+  isLoading?: boolean;
+  title?: string;
+  link?: string;
+  linkText?: string;
+  hasError?: boolean;
+  errorStatus?: number;
+}
+
+export function FeaturedProducts() {
+  // Get first 8 featured products from demo data
+  const featuredProducts = products.slice(0, 8);
+
+  return (
+    <section className="py-16 bg-gradient-to-b from-white to-gray-50">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="flex items-center justify-between mb-12">
+          <motion.div
+            initial={{ opacity: 0, x: -50 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <h2 className="text-3xl md:text-4xl font-extrabold mb-2">
+              <span className="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 bg-clip-text text-transparent">
+                FEATURED PRODUCTS
+              </span>
+            </h2>
+            <motion.div
+              className="h-1.5 w-64 bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 rounded-full"
+              initial={{ width: 0 }}
+              whileInView={{ width: 256 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8, delay: 0.3 }}
+            />
+          </motion.div>
+
+          <Link href="/shop">
+            <motion.button
+              className="text-purple-600 hover:text-purple-700 font-bold flex items-center gap-2 group bg-purple-50 hover:bg-purple-100 px-6 py-3 rounded-full transition-all duration-300"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              initial={{ opacity: 0, x: 50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+            >
+              View All
+              <motion.div
+                animate={{ x: [0, 5, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              >
+                <ArrowRight className="w-5 h-5" />
+              </motion.div>
+            </motion.button>
+          </Link>
+        </div>
+
+        <motion.div
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8"
+          variants={container}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-100px" }}
+        >
+          {featuredProducts.map((product, index) => (
+            <motion.div key={product.id} variants={item}>
+              <ProductItem product={product as any} index={index} />
+            </motion.div>
+          ))}
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+export function ProductsSection({
+  products: customProducts,
+  isLoading = false,
+  title = "FEATURED PRODUCTS",
+  link = "/shop",
+  linkText = "View All",
+  hasError = false,
+  errorStatus,
+}: ProductsSectionProps) {
+  const displayProducts = customProducts ?? products.slice(0, 8);
+
+  return (
+    <section className="py-16 bg-gradient-to-b from-white to-gray-50">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="flex items-center justify-between mb-12">
+          <motion.div
+            initial={{ opacity: 0, x: -50 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <h2 className="text-3xl md:text-4xl font-extrabold mb-2">
+              <span className="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 bg-clip-text text-transparent">
+                {title}
+              </span>
+            </h2>
+            <motion.div
+              className="h-1.5 w-64 bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 rounded-full"
+              initial={{ width: 0 }}
+              whileInView={{ width: 256 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8, delay: 0.3 }}
+            />
+          </motion.div>
+
+          <Link href={link}>
+            <motion.button
+              className="text-purple-600 hover:text-purple-700 font-bold flex items-center gap-2 group bg-purple-50 hover:bg-purple-100 px-6 py-3 rounded-full transition-all duration-300"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              initial={{ opacity: 0, x: 50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+            >
+              {linkText}
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </motion.button>
+          </Link>
+        </div>
+
+        {/* Loading state */}
+        {hasError ? (
+          <StorefrontLoadError
+            resource="featured products"
+            status={errorStatus}
+            backHref="/shop"
+            backLabel="Browse catalog"
+          />
+        ) : isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
+            {[...Array(8)].map((_, i) => (
+              <ProductSkeleton key={i} />
+            ))}
+          </div>
+        ) : displayProducts.length > 0 ? (
+          <motion.div
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8"
+            variants={container}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: "-100px" }}
+          >
+            {displayProducts.map((product: any, index: number) => (
+              <motion.div key={product.id || index} variants={item}>
+                <ProductItem product={product as any} index={index} />
+              </motion.div>
+            ))}
+          </motion.div>
+        ) : (
+          <div className="py-12 text-center text-sm text-gray-500">
+            No featured products are available right now.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
 
 export default ProductsSection;

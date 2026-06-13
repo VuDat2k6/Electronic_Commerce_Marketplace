@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useNotificationStore } from '@/app/_zustand/notificationStore';
 import { notificationApi } from '@/lib/notification-api';
@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
  */
 export const useNotifications = () => {
   const { data: session } = useSession();
+  const fetchSequenceRef = useRef(0);
   const {
     notifications,
     unreadCount,
@@ -30,26 +31,16 @@ export const useNotifications = () => {
     setUnreadCount
   } = useNotificationStore();
 
-  // Get current user ID
-  const getCurrentUserId = useCallback(async () => {
-    if (!session?.user?.email) return null;
-    
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/users/email/${encodeURIComponent(session.user.email)}`
-      );
-      const userData = await response.json();
-      return userData?.id || null;
-    } catch (error) {
-      console.error('Error fetching user ID:', error);
-      return null;
-    }
-  }, [session?.user?.email]);
+  // The NextAuth callback already places the authenticated user's ID in session.
+  const getCurrentUserId = useCallback(async () => session?.user?.id || null, [session?.user?.id]);
 
   // Fetch notifications
   const fetchNotifications = useCallback(async (customFilters?: NotificationFilters) => {
     const userId = await getCurrentUserId();
     if (!userId) return;
+
+    const requestId = fetchSequenceRef.current + 1;
+    fetchSequenceRef.current = requestId;
 
     setLoading(true);
     setError(null);
@@ -57,13 +48,19 @@ export const useNotifications = () => {
     try {
       const filtersToUse = customFilters || filters;
       const response = await notificationApi.getUserNotifications(userId, filtersToUse);
-      setNotifications(response);
+      if (fetchSequenceRef.current === requestId) {
+        setNotifications(response);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch notifications';
-      setError(errorMessage);
-      toast.error(errorMessage);
+      if (fetchSequenceRef.current === requestId) {
+        setError(errorMessage);
+        toast.error(errorMessage);
+      }
     } finally {
-      setLoading(false);
+      if (fetchSequenceRef.current === requestId) {
+        setLoading(false);
+      }
     }
   }, [filters, getCurrentUserId, setNotifications, setLoading, setError]);
 
@@ -207,39 +204,31 @@ export const useNotifications = () => {
 
 /**
  * Hook for real-time unread count (for header badge)
+ * Optimized to fetch user and count in parallel to avoid API waterfall
  */
 export const useUnreadCount = () => {
   const { unreadCount, setUnreadCount } = useNotificationStore();
   const { data: session } = useSession();
 
   const fetchUnreadCount = useCallback(async () => {
-    if (!session?.user?.email) return;
+    if (!session?.user?.id) return;
 
     try {
-      // Get user ID first
-      const userResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/users/email/${encodeURIComponent(session.user.email)}`
-      );
-      const userData = await userResponse.json();
-      
-      if (userData?.id) {
-        const { unreadCount } = await notificationApi.getUnreadCount(userData.id);
-        setUnreadCount(unreadCount);
-      }
+      const { unreadCount: nextUnreadCount } = await notificationApi.getUnreadCount(session.user.id);
+      setUnreadCount(nextUnreadCount);
     } catch (error) {
       console.error('Error fetching unread count:', error);
     }
-  }, [session?.user?.email, setUnreadCount]);
+  }, [session?.user?.id, setUnreadCount]);
 
-  // Auto-refresh unread count every 30 seconds
+  // Auto-refresh unread count every 30 seconds (optimized)
   useEffect(() => {
     fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000); // 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
     
     // Listen for order completed events to refresh immediately
     const handleOrderCompleted = () => {
-      console.log('Order completed - refreshing notifications');
-      setTimeout(fetchUnreadCount, 1000); // Slight delay to ensure notification is created
+      setTimeout(fetchUnreadCount, 1000);
     };
     
     window.addEventListener('orderCompleted', handleOrderCompleted);

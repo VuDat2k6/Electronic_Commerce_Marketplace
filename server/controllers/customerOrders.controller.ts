@@ -7,7 +7,7 @@ interface RequestLike {
       productId: string;
       quantity: number;
       unitPrice?: number;
-      merchantId?: string;
+      sellerId?: string;
     }>;
   };
 }

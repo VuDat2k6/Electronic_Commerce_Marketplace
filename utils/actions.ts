@@ -45,7 +45,7 @@ export async function createProduct(
     categoryId: string;
     sellerId: string;
   }
-): Promise<ActionResult> {
+): Promise<ActionResult<any>> {
   try {
     // Validate required fields
     if (!data.title || !data.slug || !data.sellerId || !data.categoryId) {
@@ -100,7 +100,7 @@ export async function updateProduct(
     categoryId: string;
   }>,
   sellerId: string
-): Promise<ActionResult> {
+): Promise<ActionResult<any>> {
   try {
     // Verify ownership
     const product = await prisma.product.findUnique({
@@ -263,38 +263,8 @@ export async function updateOrderItemStatus(
   orderItemId: string,
   newStatus: "processing" | "shipped" | "delivered" | "canceled",
   sellerId: string
-): Promise<ActionResult> {
-  try {
-    const orderItem = await prisma.order_item.findUnique({
-      where: { id: orderItemId },
-    });
-
-    if (!orderItem) {
-      return { success: false, error: "Order item not found" };
-    }
-
-    if (orderItem.sellerId !== sellerId) {
-      return { success: false, error: "You do not have permission to update this order" };
-    }
-
-    await prisma.order_item.update({
-      where: { id: orderItemId },
-      data: {
-        status: newStatus,
-      },
-    });
-
-    // Update order item status
-    // Note: Parent order status can be derived from order items if needed
-
-    revalidatePath("/seller/orders");
-    revalidatePath("/account/orders");
-
-    return { success: true, message: `Order status updated to ${newStatus}` };
-  } catch (error) {
-    console.error("updateOrderItemStatus error:", error);
-    return { success: false, error: "Failed to update order status" };
-  }
+): Promise<ActionResult<any>> {
+  return { success: false, error: "Not implemented. Order_item does not have a status field." };
 }
 
 /**
@@ -304,49 +274,8 @@ export async function cancelOrderItem(
   orderItemId: string,
   reason: string,
   sellerId: string
-): Promise<ActionResult> {
-  try {
-    const orderItem = await prisma.order_item.findUnique({
-      where: { id: orderItemId },
-    });
-
-    if (!orderItem) {
-      return { success: false, error: "Order item not found" };
-    }
-
-    if (orderItem.sellerId !== sellerId) {
-      return { success: false, error: "You do not have permission to cancel this order" };
-    }
-
-    if (orderItem.status === "canceled") {
-      return { success: false, error: "Order item is already canceled" };
-    }
-
-    await prisma.$transaction([
-      prisma.order_item.update({
-        where: { id: orderItemId },
-        data: {
-          status: "canceled",
-          cancelReason: reason || null,
-        },
-      }),
-      prisma.product.update({
-        where: { id: orderItem.productId },
-        data: {
-          inStock: { increment: orderItem.quantity },
-        },
-      }),
-    ]);
-
-    // Restore stock
-    revalidatePath("/seller/orders");
-    revalidatePath("/account/orders");
-
-    return { success: true, message: "Order item cancelled" };
-  } catch (error) {
-    console.error("cancelOrderItem error:", error);
-    return { success: false, error: "Failed to cancel order" };
-  }
+): Promise<ActionResult<any>> {
+  return { success: false, error: "Not implemented. Order_item does not have status/cancelReason fields." };
 }
 
 // ============================================================
@@ -364,7 +293,7 @@ export async function updateShopInfo(
     shopPhone?: string;
     shopAddress?: string;
   }
-): Promise<ActionResult> {
+): Promise<ActionResult<any>> {
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -543,7 +472,7 @@ export async function deleteNotification(
 export async function approveSellerShop(
   sellerId: string,
   adminId: string
-): Promise<ActionResult> {
+): Promise<ActionResult<any>> {
   try {
     const admin = await prisma.user.findUnique({
       where: { id: adminId },
@@ -597,7 +526,7 @@ export async function suspendSellerShop(
   sellerId: string,
   adminId: string,
   reason: string
-): Promise<ActionResult> {
+): Promise<ActionResult<any>> {
   try {
     const admin = await prisma.user.findUnique({
       where: { id: adminId },
@@ -644,7 +573,7 @@ export async function suspendSellerShop(
 export async function createCategory(
   name: string,
   adminId: string
-): Promise<ActionResult> {
+): Promise<ActionResult<any>> {
   try {
     const admin = await prisma.user.findUnique({
       where: { id: adminId },

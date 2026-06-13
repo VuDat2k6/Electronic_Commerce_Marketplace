@@ -1,22 +1,61 @@
-const express = require('express')
-const router = express.Router()
+/**
+ * Product Images Routes with Authentication
+ * 
+ * Provides secure product image endpoints:
+ * - GET /api/images/:id - Public (get product images)
+ * - POST /api/images - Seller (upload image)
+ * - PUT /api/images/:id - Seller (update image)
+ * - DELETE /api/images/:id - Seller (delete image)
+ * 
+ * @module routes/productImages
+ */
+
+const express = require('express');
+const router = express.Router();
+
 const {
   getSingleProductImages,
   createImage,
   updateImage,
   deleteImage
-} = require('../controllers/productImages')
+} = require('../controllers/productImages');
 
+const { authenticate, requireSeller, requireActiveSeller } = require('../middleware/auth');
 
-router.route('/:id').get(getSingleProductImages); 
+// ============================================================
+// PUBLIC ROUTES
+// ============================================================
 
+/**
+ * GET /api/images/:id
+ * Get images for a product
+ * Public - no authentication required
+ */
+router.get('/:id', getSingleProductImages); 
 
-router.route('/').post(createImage);
+// ============================================================
+// PROTECTED ROUTES
+// ============================================================
 
+/**
+ * POST /api/images
+ * Upload a product image
+ * Seller only
+ */
+router.post('/', authenticate, requireSeller, requireActiveSeller, createImage);
 
-router.route('/:id').put(updateImage);
+/**
+ * PUT /api/images/:id
+ * Update a product image
+ * Seller only
+ */
+router.put('/:id', authenticate, requireSeller, requireActiveSeller, updateImage);
 
+/**
+ * DELETE /api/images/:id
+ * Delete a product image
+ * Seller only
+ */
+router.delete('/:id', authenticate, requireSeller, requireActiveSeller, deleteImage);
 
-router.route('/:id').delete(deleteImage);
-
-module.exports = router
+module.exports = router;

@@ -1,5 +1,27 @@
 const { parse } = require("csv-parse/sync");
 
+const MAX_BULK_ERROR_LENGTH = 180;
+
+function truncateBulkError(message) {
+  const value = String(message || "Create failed").replace(/\s+/g, " ").trim();
+  if (value.length <= MAX_BULK_ERROR_LENGTH) return value;
+  return `${value.slice(0, MAX_BULK_ERROR_LENGTH - 3)}...`;
+}
+
+function formatCreateError(error, row) {
+  if (error?.code === "P2002") {
+    const target = Array.isArray(error.meta?.target) ? error.meta.target.join(", ") : "unique field";
+    if (target.includes("slug")) return `Slug already exists: ${row.slug}`;
+    return `Duplicate value for ${target}`;
+  }
+
+  if (error?.code === "P2000") {
+    return `A field is too long: ${error.meta?.column_name || "unknown column"}`;
+  }
+
+  return error?.message || "Create failed";
+}
+
 // Validate a single CSV row according to the Product schema constraints
 function validateRow(row) {
   const errs = [];
@@ -8,24 +30,24 @@ function validateRow(row) {
   const title = String(row.title ?? "").trim();
   const slug = String(row.slug ?? "").trim();
   const price = Number(row.price);
-  const categoryId = String(row.categoryId ?? "").trim();
+  const categoryId = String(row.categoryId ?? row.categoryName ?? row.category ?? "").trim();
   const inStock = Number(row.inStock ?? 0);
 
   if (!title) errs.push("title is required");
   if (!slug) errs.push("slug is required");
-  if (!Number.isFinite(price) || price < 0)
-    errs.push("price must be a non-negative number");
+  if (!Number.isInteger(price) || price <= 0)
+    errs.push("price must be a positive whole VND amount");
   if (!categoryId) errs.push("categoryId is required");
-  if (!Number.isFinite(inStock) || inStock < 0)
-    errs.push("inStock must be a non-negative number");
+  if (!Number.isInteger(inStock) || inStock < 0)
+    errs.push("inStock must be a non-negative whole number");
 
   if (errs.length) return { ok: false, error: errs.join(", ") };
 
   clean.title = title;
   clean.slug = slug;
-  clean.price = Math.round(price * 100) / 100; // Keep 2 decimal places
+  clean.price = price;
   clean.categoryId = categoryId;
-  clean.inStock = Math.floor(inStock); // Integer stock quantity
+  clean.inStock = inStock;
 
   clean.manufacturer = row.manufacturer
     ? String(row.manufacturer).trim()
@@ -54,17 +76,13 @@ function computeBatchStatus(successCount, errorCount) {
 }
 
 // Create products + items for valid rows, error items for invalid
-async function createBatchWithItems(tx, batchId, validRows, errorRows) {
-  const uniqueCategoryIds = [...new Set(validRows.map((r) => r.categoryId))];
+async function createBatchWithItems(tx, batchId, validRows, errorRows, sellerId) {
+  if (!sellerId) {
+    throw new Error("Seller ID is required for bulk product upload");
+  }
 
-  // Fetch categories by both ID and name (case-insensitive)
+  // Fetch all categories once so CSV can use category ID, exact name, or lower-case name.
   const categories = await tx.category.findMany({
-    where: {
-      OR: [
-        { id: { in: uniqueCategoryIds } },
-        { name: { in: uniqueCategoryIds } },
-      ],
-    },
     select: { id: true, name: true },
   });
 
@@ -97,7 +115,7 @@ async function createBatchWithItems(tx, batchId, validRows, errorRows) {
           categoryId: row.categoryId,
           inStock: row.inStock,
           status: "ERROR",
-          error: `Category not found: ${row.categoryId}`,
+          error: truncateBulkError(`Category not found: ${row.categoryId}`),
         },
       });
       failed++;
@@ -107,6 +125,7 @@ async function createBatchWithItems(tx, batchId, validRows, errorRows) {
     try {
       const product = await tx.product.create({
         data: {
+          sellerId,
           title: row.title,
           slug: row.slug,
           price: row.price,
@@ -116,6 +135,7 @@ async function createBatchWithItems(tx, batchId, validRows, errorRows) {
           mainImage: row.mainImage ?? "",
           categoryId: resolvedCategoryId, // Use resolved category ID
           inStock: row.inStock,
+          status: "PUBLISHED",
         },
       });
 
@@ -149,7 +169,7 @@ async function createBatchWithItems(tx, batchId, validRows, errorRows) {
           categoryId: resolvedCategoryId || row.categoryId,
           inStock: row.inStock,
           status: "ERROR",
-          error: e?.message || "Create failed",
+          error: truncateBulkError(formatCreateError(e, row)),
         },
       });
       failed++;
@@ -169,7 +189,7 @@ async function createBatchWithItems(tx, batchId, validRows, errorRows) {
         categoryId: "",
         inStock: 0,
         status: "ERROR",
-        error: `Row ${err.index}: ${err.error}`,
+        error: truncateBulkError(`Row ${err.index}: ${err.error}`),
       },
     });
     failed++;
@@ -237,10 +257,10 @@ async function applyItemUpdates(tx, batchId, updates) {
     if (!current) continue;
 
     const price = Number(upd.price);
-    const inStock = Math.floor(Number(upd.inStock));
+    const inStock = Number(upd.inStock);
 
-    if (!Number.isFinite(price) || price < 0) continue;
-    if (!Number.isFinite(inStock) || inStock < 0) continue;
+    if (!Number.isInteger(price) || price <= 0) continue;
+    if (!Number.isInteger(inStock) || inStock < 0) continue;
 
     if (current.productId) {
       await tx.product.update({

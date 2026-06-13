@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { SectionTitle } from "@/components";
-import apiClient from "@/lib/api";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
 interface SubOrderProduct {
@@ -28,14 +26,12 @@ interface SubOrderProduct {
 interface SubOrder {
   id: string;
   merchantId: string;
-  merchantNameSnapshot: string;
   status: string;
   subTotal: number;
   shippingTotal: number;
   trackingNumber: string | null;
   createdAt: string;
   products: SubOrderProduct[];
-  merchant?: { id: string; name: string };
 }
 
 interface Order {
@@ -44,7 +40,7 @@ interface Order {
   lastname: string;
   email: string;
   phone: string;
-  adress: string;
+  address: string;
   apartment: string;
   city: string;
   country: string;
@@ -66,6 +62,9 @@ const STATUS_COLORS: Record<string, string> = {
   PARTIALLY_FULFILLED: "bg-orange-100 text-orange-800",
   PARTIALLY_CANCELLED: "bg-orange-100 text-orange-800",
   PAID: "bg-blue-100 text-blue-800",
+  processing: "bg-blue-100 text-blue-800",
+  delivered: "bg-green-100 text-green-800",
+  canceled: "bg-red-100 text-red-800",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -79,48 +78,38 @@ const STATUS_LABELS: Record<string, string> = {
   PARTIALLY_FULFILLED: "Partially Fulfilled",
   PARTIALLY_CANCELLED: "Partially Cancelled",
   PAID: "Paid",
+  processing: "Processing",
+  delivered: "Delivered",
+  canceled: "Canceled",
+};
+
+const ORDER_CANCEL_WINDOW_MS = 12 * 60 * 60 * 1000;
+const BLOCKED_CANCEL_STATUSES = new Set(["SHIPPED", "DELIVERED", "CANCELLED"]);
+const CLOSED_ORDER_STATUSES = new Set(["canceled", "delivered"]);
+
+const getImageSrc = (image?: string | null) => {
+  if (!image) return "/product_placeholder.jpg";
+  if (image.startsWith("http") || image.startsWith("/")) return image;
+  return `/${image}`;
 };
 
 const AccountOrdersPage = () => {
   const { data: session } = useSession();
-  const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    fetchOrders();
-  }, [session]);
-
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      // 获取用户 ID
-      let customerId = "";
-      if (session?.user?.email) {
-        try {
-          const userResponse = await apiClient.get(`/api/users/email/${session.user.email}`);
-          if (userResponse.ok) {
-            const userData = await userResponse.json();
-            customerId = userData.id;
-          }
-        } catch (e) {
-          console.error("Error fetching user:", e);
-        }
-      }
-
-      if (!customerId) {
+      if (!session?.user) {
         setOrders([]);
         setLoading(false);
         return;
       }
 
-      // 设置 header 并获取订单
-      const response = await fetch(`/api/account/orders`, {
-        headers: {
-          "x-customer-id": customerId,
-        },
-      });
+      const response = await fetch(`/api/account/orders`, { cache: "no-store" });
 
       if (!response.ok) {
         throw new Error("Failed to fetch orders");
@@ -134,7 +123,11 @@ const AccountOrdersPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
   const toggleOrder = (orderId: string) => {
     setExpandedOrders((prev) => {
@@ -157,8 +150,88 @@ const AccountOrdersPage = () => {
     });
   };
 
-  const formatPrice = (cents: number) => {
-    return (cents / 100).toFixed(2);
+  const formatDateTime = (date: Date) => {
+    return date.toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const formatPrice = (amount: number) => {
+    return amount.toLocaleString("vi-VN") + " VND";
+  };
+
+  const getCancelDeadline = (order: Order) => {
+    if (!order.dateTime) return null;
+    const placedAt = new Date(order.dateTime);
+    if (Number.isNaN(placedAt.getTime())) return null;
+    return new Date(placedAt.getTime() + ORDER_CANCEL_WINDOW_MS);
+  };
+
+  const canCancelOrder = (order: Order) => {
+    const deadline = getCancelDeadline(order);
+    if (!deadline || Date.now() > deadline.getTime()) return false;
+    if (CLOSED_ORDER_STATUSES.has(order.status)) return false;
+    return order.subOrders.every((subOrder) => !BLOCKED_CANCEL_STATUSES.has(subOrder.status));
+  };
+
+  const getCancelUnavailableReason = (order: Order) => {
+    const deadline = getCancelDeadline(order);
+
+    if (!deadline) {
+      return "Cancellation status is unavailable for this order.";
+    }
+
+    if (Date.now() > deadline.getTime()) {
+      return `Cancellation window expired on ${formatDateTime(deadline)}.`;
+    }
+
+    if (CLOSED_ORDER_STATUSES.has(order.status)) {
+      return "This order is already closed.";
+    }
+
+    const blockedSubOrder = order.subOrders.find((subOrder) =>
+      BLOCKED_CANCEL_STATUSES.has(subOrder.status)
+    );
+
+    if (blockedSubOrder) {
+      return `This order can no longer be cancelled because it is ${STATUS_LABELS[blockedSubOrder.status] || blockedSubOrder.status}.`;
+    }
+
+    return "This order can no longer be cancelled.";
+  };
+
+  const handleCancelOrder = async (order: Order) => {
+    if (!canCancelOrder(order)) {
+      toast.error("This order can no longer be cancelled");
+      return;
+    }
+
+    const confirmed = window.confirm("Cancel this order? Inventory and voucher usage will be restored.");
+    if (!confirmed) return;
+
+    setCancellingOrderId(order.id);
+    try {
+      const response = await fetch(`/api/account/orders/${order.id}/cancel`, {
+        method: "PATCH",
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Unable to cancel order");
+      }
+
+      toast.success("Order cancelled successfully");
+      await fetchOrders();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to cancel order";
+      toast.error(message);
+    } finally {
+      setCancellingOrderId(null);
+    }
   };
 
   if (loading) {
@@ -200,6 +273,8 @@ const AccountOrdersPage = () => {
               (sum, so) => sum + so.products.reduce((s, p) => s + p.quantity, 0),
               0
             );
+            const cancelDeadline = getCancelDeadline(order);
+            const canCancel = canCancelOrder(order);
 
             return (
               <div
@@ -225,7 +300,7 @@ const AccountOrdersPage = () => {
                     <div>
                       <p className="text-xs text-gray-500 uppercase">Total</p>
                       <p className="text-sm font-medium text-gray-900">
-                        ${formatPrice(order.total)}
+                        {formatPrice(order.total)}
                       </p>
                     </div>
                     <div>
@@ -234,7 +309,28 @@ const AccountOrdersPage = () => {
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-wrap items-center justify-end gap-3">
+                    {canCancel ? (
+                      <button
+                        type="button"
+                        disabled={cancellingOrderId === order.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleCancelOrder(order);
+                        }}
+                        className="rounded-full border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
+                        title={cancelDeadline ? `Available until ${formatDateTime(cancelDeadline)}` : undefined}
+                      >
+                        {cancellingOrderId === order.id ? "Cancelling..." : "Cancel order"}
+                      </button>
+                    ) : (
+                      <span
+                        className="rounded-full border border-gray-200 bg-gray-100 px-4 py-2 text-xs font-semibold text-gray-500"
+                        title={getCancelUnavailableReason(order)}
+                      >
+                        Cancel unavailable
+                      </span>
+                    )}
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-medium ${
                         STATUS_COLORS[order.status] || "bg-gray-100 text-gray-800"
@@ -260,11 +356,23 @@ const AccountOrdersPage = () => {
                   <div className="border-t border-gray-200">
                     {/* 收货地址 */}
                     <div className="px-6 py-4 bg-blue-50 border-b border-gray-200">
-                      <h3 className="text-sm font-medium text-gray-900 mb-2">Shipping Address</h3>
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                        <h3 className="text-sm font-medium text-gray-900">Shipping Address</h3>
+                        {canCancel && cancelDeadline && (
+                          <span className="text-xs font-medium text-red-600">
+                            Cancellation available until {formatDateTime(cancelDeadline)}
+                          </span>
+                        )}
+                        {!canCancel && (
+                          <span className="text-xs font-medium text-gray-500">
+                            {getCancelUnavailableReason(order)}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-600">
                         {order.name} {order.lastname}
                         <br />
-                        {order.adress}
+                        {order.address}
                         {order.apartment ? `, ${order.apartment}` : ""}
                         <br />
                         {order.city}, {order.country} {order.postalCode}
@@ -281,10 +389,10 @@ const AccountOrdersPage = () => {
                           <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                             <div className="flex items-center gap-3">
                               <Link
-                                href={`/shop/${subOrder.merchantId}`}
+                                href={`/seller/${subOrder.merchantId}`}
                                 className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
                               >
-                                {subOrder.merchant?.name || subOrder.merchantNameSnapshot}
+                                {subOrder.products[0]?.merchantNameSnapshot || "Seller"}
                               </Link>
                               <span
                                 className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -315,7 +423,7 @@ const AccountOrdersPage = () => {
                                 <div className="flex-shrink-0">
                                   {item.productImageSnapshot ? (
                                     <Image
-                                      src={`/${item.productImageSnapshot}`}
+                                      src={getImageSrc(item.productImageSnapshot)}
                                       alt={item.productNameSnapshot}
                                       width={64}
                                       height={64}
@@ -332,11 +440,11 @@ const AccountOrdersPage = () => {
                                     {item.productNameSnapshot}
                                   </p>
                                   <p className="text-xs text-gray-500">
-                                    Qty: {item.quantity} × ${formatPrice(item.unitPriceSnapshot)}
+                                    Qty: {item.quantity} × {formatPrice(item.unitPriceSnapshot)}
                                   </p>
                                 </div>
                                 <div className="text-sm font-medium text-gray-900">
-                                  ${formatPrice(item.unitPriceSnapshot * item.quantity)}
+                                  {formatPrice(item.unitPriceSnapshot * item.quantity)}
                                 </div>
                               </div>
                             ))}
@@ -348,21 +456,21 @@ const AccountOrdersPage = () => {
                               <div className="flex justify-between gap-8 text-sm">
                                 <span className="text-gray-500">Subtotal:</span>
                                 <span className="text-gray-900">
-                                  ${formatPrice(subOrder.subTotal)}
+                                  {formatPrice(subOrder.subTotal)}
                                 </span>
                               </div>
                               {subOrder.shippingTotal > 0 && (
                                 <div className="flex justify-between gap-8 text-sm">
                                   <span className="text-gray-500">Shipping:</span>
                                   <span className="text-gray-900">
-                                    ${formatPrice(subOrder.shippingTotal)}
+                                    {formatPrice(subOrder.shippingTotal)}
                                   </span>
                                 </div>
                               )}
                               <div className="flex justify-between gap-8 text-sm font-medium">
                                 <span>SubOrder Total:</span>
                                 <span className="text-blue-600">
-                                  ${formatPrice(subOrder.subTotal + subOrder.shippingTotal)}
+                                  {formatPrice(subOrder.subTotal + subOrder.shippingTotal)}
                                 </span>
                               </div>
                             </div>
@@ -379,7 +487,7 @@ const AccountOrdersPage = () => {
                             Order Total (incl. all shops)
                           </p>
                           <p className="text-xl font-bold text-gray-900">
-                            ${formatPrice(order.total)}
+                            {formatPrice(order.total)}
                           </p>
                         </div>
                       </div>

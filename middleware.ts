@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 export default withAuth(
   function middleware(req) {
     const role = req.nextauth.token?.role;
+    const shopStatus = req.nextauth.token?.shopStatus;
     const path = req.nextUrl.pathname;
 
     // Admin routes — chỉ admin
@@ -25,13 +26,13 @@ export default withAuth(
       path.startsWith("/seller/settings") ||
       path.startsWith("/seller/bulk-upload")
     ) {
-      if (role !== "seller") {
-        return NextResponse.redirect(new URL("/become-seller", req.url));
+      if (role !== "seller" || shopStatus !== "ACTIVE") {
+        return NextResponse.redirect(new URL("/seller/status", req.url));
       }
     }
 
     // Profile routes — phải đăng nhập (bất kỳ role nào)
-    if (path.startsWith("/profile")) {
+    if (path.startsWith("/profile") || path.startsWith("/messages")) {
       if (!role) {
         return NextResponse.redirect(new URL("/login", req.url));
       }
@@ -52,8 +53,12 @@ export default withAuth(
           path.startsWith("/seller/products") ||
           path.startsWith("/seller/orders") ||
           path.startsWith("/seller/vouchers") ||
-          path.startsWith("/seller/settings")
+          path.startsWith("/seller/settings") ||
+          path.startsWith("/seller/bulk-upload")
         ) {
+          return !!token;
+        }
+        if (path.startsWith("/messages")) {
           return !!token;
         }
         return true;
@@ -74,5 +79,6 @@ export const config = {
     "/seller/settings",
     "/seller/bulk-upload",
     "/profile/:path*",
+    "/messages/:path*",
   ],
 };
