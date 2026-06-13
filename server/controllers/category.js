@@ -13,8 +13,8 @@
  * @module controllers/category
  */
 
-const prisma = require("../utills/db");
-const { asyncHandler, AppError } = require("../utills/errorHandler");
+const prisma = require("../utils/db");
+const { asyncHandler, AppError } = require("../utils/errorHandler");
 
 // ============================================================
 // CATEGORY CONTROLLER FUNCTIONS

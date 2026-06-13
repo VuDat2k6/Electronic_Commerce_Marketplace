@@ -1,113 +1,211 @@
 // server/controllers/sellerAnalytics.js
-// Optimized: Uses database aggregation instead of fetching all data to memory
-const prisma = require('../utills/db');
-const { asyncHandler } = require('../utills/errorHandler');
+const prisma = require('../utils/db');
+const { asyncHandler } = require('../utils/errorHandler');
 
-// GET /api/seller/analytics/overview?sellerId=xxx
+function startOfDay(date) {
+  const value = new Date(date);
+  value.setHours(0, 0, 0, 0);
+  return value;
+}
+
+function toDateKey(date) {
+  return new Date(date).toISOString().split('T')[0];
+}
+
+function normalizeAnalyticsStatus(status) {
+  const normalized = String(status || '').trim().toUpperCase();
+
+  if (['PENDING'].includes(normalized)) return 'pending';
+  if (['CONFIRMED', 'PROCESSING', 'SHIPPED'].includes(normalized)) return 'processing';
+  if (['DELIVERED', 'COMPLETED', 'PAID'].includes(normalized)) return 'delivered';
+  if (['CANCELLED', 'CANCELED'].includes(normalized)) return 'canceled';
+
+  return 'pending';
+}
+
+function addProductSales(productMap, productId, quantity, revenue, product) {
+  if (!productId) return;
+
+  const existing = productMap.get(productId) || {
+    productId,
+    quantitySold: 0,
+    revenue: 0,
+    product: product || null,
+  };
+
+  existing.quantitySold += quantity;
+  existing.revenue += revenue;
+  if (!existing.product && product) {
+    existing.product = product;
+  }
+
+  productMap.set(productId, existing);
+}
+
+// GET /api/seller/analytics/overview
 const getSellerAnalytics = asyncHandler(async (req, res) => {
-  const { sellerId } = req.query;
-  if (!sellerId) throw new Error('sellerId is required');
+  const sellerId = req.user.role === 'admin' && req.query.sellerId
+    ? req.query.sellerId
+    : req.user.id;
 
-  const seller = await prisma.user.findUnique({ where: { id: sellerId } });
-  if (!seller || seller.role !== 'seller') throw new Error('Seller does not exist');
+  const seller = await prisma.user.findUnique({
+    where: { id: sellerId },
+    select: { id: true, role: true },
+  });
+
+  if (!seller || seller.role !== 'seller') {
+    throw new Error('Seller does not exist');
+  }
 
   const now = new Date();
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const today = startOfDay(now);
+  const sevenDaysAgo = startOfDay(new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000));
+  const thirtyDaysAgo = startOfDay(new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000));
 
-  // Parallel queries for better performance
-  const [
-    totalProducts,
-    totalOrderCount,
-    totalRevenueResult,
-    recentOrdersResult,
-    recentRevenueResult,
-  ] = await Promise.all([
-    // Total products count
+  const [totalProducts, legacyOrderItems, currentSubOrders] = await Promise.all([
     prisma.product.count({ where: { sellerId } }),
-
-    // Count unique orders
-    prisma.order_item.groupBy({
-      by: ['orderId'],
-      where: { sellerId },
-      _count: true,
-    }),
-
-    // Total revenue using aggregation
-    prisma.order_item.aggregate({
-      where: { sellerId },
-      _sum: { priceAtPurchase: true, quantity: true },
-    }),
-
-    // Recent orders count (last 7 days) - with date filter
     prisma.order_item.findMany({
-      where: {
-        sellerId,
-        order: {
-          dateTime: { gte: sevenDaysAgo }
-        }
-      },
-      select: {
-        orderId: true,
-        priceAtPurchase: true,
-        quantity: true
-      }
-    }),
-
-    // Get top products by sales (limited query)
-    prisma.order_item.groupBy({
-      by: ['productId'],
       where: { sellerId },
-      _sum: { quantity: true, priceAtPurchase: true },
-      orderBy: { _sum: { priceAtPurchase: 'desc' } },
-      take: 5
+      include: {
+        order: {
+          select: {
+            id: true,
+            status: true,
+            dateTime: true,
+          },
+        },
+        product: {
+          select: {
+            id: true,
+            title: true,
+            mainImage: true,
+          },
+        },
+      },
+      orderBy: { order: { dateTime: 'desc' } },
+    }),
+    prisma.subOrder.findMany({
+      where: {
+        merchantId: sellerId,
+        parentOrder: {
+          is: {
+            OR: [
+              { payments: { none: { provider: 'VNPAY' } } },
+              { payments: { some: { provider: 'VNPAY', status: 'COMPLETED' } } },
+            ],
+          },
+        },
+      },
+      include: {
+        parentOrder: {
+          select: {
+            id: true,
+            status: true,
+            dateTime: true,
+          },
+        },
+        products: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                title: true,
+                mainImage: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     }),
   ]);
 
-  const totalOrders = totalOrderCount.length;
-  const totalRevenue = totalRevenueResult._sum.priceAtPurchase || 0;
+  const productSales = new Map();
+  const legacyOrderMap = new Map();
 
-  // Calculate recent revenue from filtered results
-  const recentRevenue = recentOrdersResult.reduce(
-    (sum, item) => sum + (item.priceAtPurchase * item.quantity), 0
-  );
-  const recentOrders = recentOrdersResult.length;
+  for (const item of legacyOrderItems) {
+    if (!item.order) continue;
 
-  // Get product details for top products
-  const topProductIds = recentOrdersResult.length > 0
-    ? recentOrdersResult.map(item => item.productId)
-    : [];
+    const revenue = item.priceAtPurchase * item.quantity;
+    const existing = legacyOrderMap.get(item.orderId) || {
+      id: item.orderId,
+      total: 0,
+      itemCount: 0,
+      status: item.order.status,
+      date: item.order.dateTime,
+    };
 
-  let topProducts = [];
-  if (topProductIds.length > 0) {
-    const products = await prisma.product.findMany({
-      where: { id: { in: topProductIds } },
-      select: { id: true, title: true, mainImage: true }
-    });
-    const productMap = new Map(products.map(p => [p.id, p]));
-
-    topProducts = recentOrdersResult.map(item => ({
-      productId: item.productId,
-      quantitySold: item.quantity,
-      revenue: item.priceAtPurchase * item.quantity,
-      product: productMap.get(item.productId) || null
-    }));
+    existing.total += revenue;
+    existing.itemCount += item.quantity;
+    legacyOrderMap.set(item.orderId, existing);
+    addProductSales(productSales, item.productId, item.quantity, revenue, item.product);
   }
 
-  // Simplified daily revenue - just return last 7 days
-  const dailyRevenueArray = [];
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-    const dateStr = date.toISOString().split('T')[0];
-    dailyRevenueArray.push({ date: dateStr, revenue: 0 });
+  const legacyOrders = Array.from(legacyOrderMap.values());
+  const currentOrders = currentSubOrders.map((subOrder) => {
+    const productTotal = subOrder.products.reduce(
+      (sum, product) => sum + product.unitPriceSnapshot * product.quantity,
+      0
+    );
+    const total = subOrder.subTotal || productTotal;
+
+    for (const product of subOrder.products) {
+      addProductSales(
+        productSales,
+        product.productId,
+        product.quantity,
+        product.unitPriceSnapshot * product.quantity,
+        product.product
+      );
+    }
+
+    return {
+      id: subOrder.id,
+      parentOrderId: subOrder.parentOrderId,
+      total,
+      itemCount: subOrder.products.reduce((sum, product) => sum + product.quantity, 0),
+      status: subOrder.status || subOrder.parentOrder?.status,
+      date: subOrder.parentOrder?.dateTime || subOrder.createdAt,
+    };
+  });
+
+  const allOrders = [...legacyOrders, ...currentOrders].filter((order) => order.date);
+  const totalOrders = allOrders.length;
+  const totalRevenue = allOrders.reduce((sum, order) => sum + order.total, 0);
+
+  const recentOrdersList = allOrders.filter((order) => new Date(order.date) >= sevenDaysAgo);
+  const recentOrders = recentOrdersList.length;
+  const recentRevenue = recentOrdersList.reduce((sum, order) => sum + order.total, 0);
+
+  const dailyRevenueMap = new Map();
+  for (let i = 29; i >= 0; i--) {
+    const date = startOfDay(new Date(today.getTime() - i * 24 * 60 * 60 * 1000));
+    dailyRevenueMap.set(toDateKey(date), 0);
   }
 
-  // Simplified order status breakdown
+  for (const order of allOrders) {
+    const orderDate = new Date(order.date);
+    if (orderDate < thirtyDaysAgo) continue;
+
+    const key = toDateKey(orderDate);
+    dailyRevenueMap.set(key, (dailyRevenueMap.get(key) || 0) + order.total);
+  }
+
   const orderStatusBreakdown = {
-    pending: Math.floor(totalOrders * 0.1),
-    processing: Math.floor(totalOrders * 0.3),
-    delivered: Math.floor(totalOrders * 0.5),
-    canceled: Math.floor(totalOrders * 0.1)
+    pending: 0,
+    processing: 0,
+    delivered: 0,
+    canceled: 0,
   };
+
+  for (const order of allOrders) {
+    const key = normalizeAnalyticsStatus(order.status);
+    orderStatusBreakdown[key] += 1;
+  }
+
+  const topProducts = Array.from(productSales.values())
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 5);
 
   return res.json({
     totalProducts,
@@ -116,9 +214,9 @@ const getSellerAnalytics = asyncHandler(async (req, res) => {
     recentOrders,
     recentRevenue,
     topProducts,
-    dailyRevenue: dailyRevenueArray,
+    dailyRevenue: Array.from(dailyRevenueMap.entries()).map(([date, revenue]) => ({ date, revenue })),
     orderStatusBreakdown,
-    averageOrderValue: totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0
+    averageOrderValue: totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0,
   });
 });
 

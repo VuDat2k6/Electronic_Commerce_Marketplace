@@ -64,6 +64,28 @@ export const createOrderUpdateNotification = async (
 };
 
 /**
+ * Create seller new order notification
+ */
+export const createNewOrderNotification = async (
+  sellerId: string,
+  orderId: string,
+  productCount: number,
+  totalAmount: number,
+  buyerName = 'A customer'
+) => {
+  const productLabel = productCount === 1 ? 'item' : 'items';
+
+  return createNotification(
+    sellerId,
+    'New order received',
+    `${buyerName} placed order #${orderId} with ${productCount} ${productLabel}.`,
+    NotificationType.NEW_ORDER,
+    NotificationPriority.HIGH,
+    { orderId, productCount, totalAmount }
+  );
+};
+
+/**
  * Create payment status notification
  */
 export const createPaymentNotification = async (

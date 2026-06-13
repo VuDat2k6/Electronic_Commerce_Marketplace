@@ -17,7 +17,7 @@
  * @module controllers/voucher
  */
 
-const prisma = require("../utills/db");
+const prisma = require("../utils/db");
 
 // ============================================================
 // CREATE VOUCHER
@@ -431,6 +431,9 @@ async function deleteVoucher(request, response) {
 async function validateVoucherBusiness(voucher, orderTotal, cartItems) {
   const errors = [];
   let discount = 0;
+  const normalizedOrderTotal = Number(orderTotal || 0);
+  let eligibleTotal = normalizedOrderTotal;
+  const formatVnd = (amount) => `${Number(amount || 0).toLocaleString("vi-VN")} VND`;
 
   // Check if voucher is active
   if (!voucher.isActive) {
@@ -453,18 +456,31 @@ async function validateVoucherBusiness(voucher, orderTotal, cartItems) {
   }
 
   // Check minimum order value
-  if (voucher.minOrderValue && orderTotal < voucher.minOrderValue) {
-    errors.push(`Minimum order value of ${voucher.minOrderValue / 100} required`);
+  if (!voucher.merchantId && voucher.minOrderValue && eligibleTotal < voucher.minOrderValue) {
+    errors.push(`Minimum order value of ${voucher.minOrderValue.toLocaleString('vi-VN')}₫ required`);
   }
 
   // Check merchant restriction for cart items
   if (voucher.merchantId && cartItems) {
-    const merchantItems = cartItems.filter(
-      (item) => item.merchantId === voucher.merchantId
-    );
-    if (merchantItems.length === 0) {
+    eligibleTotal = cartItems
+      .filter((item) => (item.merchantId || item.sellerId) === voucher.merchantId)
+      .reduce((sum, item) => {
+        const quantity = Number(item.quantity || item.amount || 0);
+        const unitPrice = Number(item.unitPrice || item.price || 0);
+        return sum + quantity * unitPrice;
+      }, 0);
+
+    if (eligibleTotal <= 0) {
       errors.push(`This voucher only applies to products from ${voucher.merchant?.name || "the merchant"}`);
     }
+  }
+
+  if (voucher.merchantId && voucher.minOrderValue && eligibleTotal < voucher.minOrderValue) {
+    errors.push(`Minimum order value of ${voucher.minOrderValue.toLocaleString("vi-VN")} VND required`);
+  }
+
+  if (errors.length > 0 && voucher.maxDiscount) {
+    errors.push(`Maximum discount: ${formatVnd(voucher.maxDiscount)}`);
   }
 
   // Calculate discount if no errors
@@ -474,7 +490,7 @@ async function validateVoucherBusiness(voucher, orderTotal, cartItems) {
       discount = voucher.discountValue;
     } else if (voucher.discountType === "PERCENTAGE") {
       // Percentage discount
-      discount = Math.floor((orderTotal || 0) * (voucher.discountValue / 100));
+      discount = Math.floor(eligibleTotal * (voucher.discountValue / 100));
       // Apply max discount cap if set
       if (voucher.maxDiscount) {
         discount = Math.min(discount, voucher.maxDiscount);
@@ -482,7 +498,7 @@ async function validateVoucherBusiness(voucher, orderTotal, cartItems) {
     }
 
     // Discount cannot exceed order total
-    discount = Math.min(discount, orderTotal || 0);
+    discount = Math.min(discount, eligibleTotal);
   }
 
   return {

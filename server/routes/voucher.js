@@ -1,5 +1,20 @@
+/**
+ * Voucher Routes with Authentication
+ * 
+ * Provides secure voucher endpoints:
+ * - GET /api/vouchers - Public (list active vouchers)
+ * - POST /api/vouchers - Admin only (create voucher)
+ * - POST /api/vouchers/validate - Authenticated (validate voucher)
+ * - POST /api/vouchers/apply - Authenticated (apply voucher to order)
+ * - PUT /api/vouchers/:id - Admin only (update voucher)
+ * - DELETE /api/vouchers/:id - Admin only (delete voucher)
+ * 
+ * @module routes/voucher
+ */
+
 const express = require("express");
 const router = express.Router();
+
 const {
   createVoucher,
   getVouchers,
@@ -9,22 +24,60 @@ const {
   deleteVoucher,
 } = require("../controllers/voucher");
 
-// GET /api/vouchers - 获取优惠券列表
+const { authenticate, requireAdmin } = require("../middleware/auth");
+
+// ============================================================
+// PUBLIC ROUTES
+// ============================================================
+
+/**
+ * GET /api/vouchers
+ * Get list of active vouchers
+ * Public - no authentication required
+ */
 router.get("/", getVouchers);
 
-// POST /api/vouchers - 创建优惠券（管理员）
-router.post("/", createVoucher);
+// ============================================================
+// AUTHENTICATED ROUTES
+// ============================================================
 
-// POST /api/vouchers/validate - 验证优惠券
-router.post("/validate", validateVoucher);
+/**
+ * POST /api/vouchers/validate
+ * Validate a voucher code
+ * Authenticated user
+ */
+router.post("/validate", authenticate, validateVoucher);
 
-// POST /api/vouchers/apply - 应用优惠券
-router.post("/apply", applyVoucher);
+/**
+ * POST /api/vouchers/apply
+ * Apply voucher to order
+ * Authenticated user
+ */
+router.post("/apply", authenticate, applyVoucher);
 
-// PUT /api/vouchers/:id - 更新优惠券
-router.put("/:id", updateVoucher);
+// ============================================================
+// ADMIN ONLY ROUTES
+// ============================================================
 
-// DELETE /api/vouchers/:id - 删除优惠券（软删除）
-router.delete("/:id", deleteVoucher);
+/**
+ * POST /api/vouchers
+ * Create a new voucher
+ * Admin only
+ */
+router.post("/", authenticate, requireAdmin, createVoucher);
+
+/**
+ * PUT /api/vouchers/:id
+ * Update a voucher
+ * Admin only
+ */
+router.put("/:id", authenticate, requireAdmin, updateVoucher);
+
+/**
+ * DELETE /api/vouchers/:id
+ * Delete a voucher (soft delete)
+ * Admin only
+ */
+router.delete("/:id", authenticate, requireAdmin, deleteVoucher);
 
 module.exports = router;

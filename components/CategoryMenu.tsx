@@ -1,50 +1,59 @@
-// CategoryMenu component - REDESIGNED with Purple theme
+// CategoryMenu - Modern design with gradient icons
 "use client";
 
 import React from "react";
-import CategoryItem from "./CategoryItem";
-import { 
-  FaMobile, 
-  FaTablet, 
-  FaHandPointer, 
-  FaCameraRetro, 
-  FaStopwatch, 
-  FaLaptop, 
-  FaDesktop,
-  FaPrint,
-  FaHeadphones,
-  FaHeadset
-} from "react-icons/fa";
+import Link from "next/link";
+import Image from "next/image";
 import { categoryMenuList } from "@/lib/utils";
-import Heading from "./Heading";
-
-const iconMap: { [key: string]: React.ReactNode } = {
-  "Smart Phones": <FaMobile className="w-10 h-10" />,
-  "Tablets": <FaTablet className="w-10 h-10" />,
-  "Mouses": <FaHandPointer className="w-10 h-10" />,
-  "Cameras": <FaCameraRetro className="w-10 h-10" />,
-  "Smart Watches": <FaStopwatch className="w-10 h-10" />,
-  "Laptops": <FaLaptop className="w-10 h-10" />,
-  "PCs": <FaDesktop className="w-10 h-10" />,
-  "Printers": <FaPrint className="w-10 h-10" />,
-  "Earbuds": <FaHeadset className="w-10 h-10" />,
-  "Head Phones": <FaHeadphones className="w-10 h-10" />,
-};
+import { motion } from "framer-motion";
 
 const CategoryMenu = () => {
   return (
-    <div className="py-12 bg-gradient-to-r from-purple-50 to-cyan-50">
-      <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
-        <Heading title="DANH MỤC SẢN PHẨM" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mt-8">
-          {categoryMenuList.map((item) => (
-            <CategoryItem title={item.title} key={item.id} href={item.href}>
-              {iconMap[item.title] || <FaMobile className="w-10 h-10" />}
-            </CategoryItem>
+    <section className="py-16 bg-gradient-to-b from-white to-purple-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.h2
+          className="text-3xl lg:text-4xl font-extrabold text-center mb-12"
+          initial={{ opacity: 0, y: -30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+        >
+          <span className="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 bg-clip-text text-transparent">
+            SHOP BY CATEGORY
+          </span>
+        </motion.h2>
+        
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {categoryMenuList.map((item, index) => (
+            <motion.div
+              key={item.id}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.4, delay: index * 0.05 }}
+            >
+              <Link
+                href={item.href}
+                className="group flex flex-col items-center gap-3 p-6 bg-white hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50 rounded-2xl border border-gray-100 hover:border-purple-200 shadow-sm hover:shadow-lg transition-all duration-300"
+              >
+                <div className="w-12 h-12 flex items-center justify-center bg-gradient-to-br from-purple-100 to-pink-100 group-hover:from-purple-200 group-hover:to-pink-200 rounded-xl transition-all">
+                  <Image
+                    src={item.src}
+                    alt={item.title}
+                    width={32}
+                    height={32}
+                    className="h-8 w-8 object-contain"
+                  />
+                </div>
+                <span className="text-sm font-semibold text-gray-700 group-hover:text-purple-600 text-center transition-colors">
+                  {item.title}
+                </span>
+              </Link>
+            </motion.div>
           ))}
         </div>
       </div>
-    </div>
+    </section>
   );
 };
 

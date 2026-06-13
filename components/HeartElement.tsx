@@ -14,7 +14,7 @@ const HeartElement = ({wishQuantity}: {wishQuantity: number}) => {
         whileTap={{ scale: 0.95 }}
         className="relative"
       >
-        <FaHeart className="text-2xl text-black group-hover:text-pink-500 transition-colors duration-300" />
+        <FaHeart className="text-2xl text-gray-700 group-hover:text-pink-500 transition-colors duration-300" />
         
         {/* Wishlist Badge with Animation */}
         <AnimatePresence>

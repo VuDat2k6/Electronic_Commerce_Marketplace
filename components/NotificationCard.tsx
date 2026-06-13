@@ -7,6 +7,7 @@ import {
   FaCreditCard, 
   FaTag, 
   FaExclamationTriangle,
+  FaStore,
   FaCheck,
   FaTrash,
   FaCircle 
@@ -35,6 +36,8 @@ interface NotificationCardProps {
 
 const getTypeIcon = (type: NotificationType) => {
   switch (type) {
+    case NotificationType.NEW_ORDER:
+      return <FaStore className="text-amber-500" />;
     case NotificationType.ORDER_UPDATE:
       return <FaShoppingCart className="text-blue-500" />;
     case NotificationType.PAYMENT_STATUS:
@@ -50,6 +53,8 @@ const getTypeIcon = (type: NotificationType) => {
 
 const getTypeColor = (type: NotificationType) => {
   switch (type) {
+    case NotificationType.NEW_ORDER:
+      return 'bg-amber-100 text-amber-800';
     case NotificationType.ORDER_UPDATE:
       return 'bg-blue-100 text-blue-800';
     case NotificationType.PAYMENT_STATUS:

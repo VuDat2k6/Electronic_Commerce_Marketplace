@@ -1,55 +1,57 @@
 export enum NotificationType {
   ORDER_UPDATE = 'ORDER_UPDATE',
-  PAYMENT_STATUS = 'PAYMENT_STATUS', 
+  PAYMENT_STATUS = 'PAYMENT_STATUS',
   PROMOTION = 'PROMOTION',
-  SYSTEM_ALERT = 'SYSTEM_ALERT'
+  SYSTEM_ALERT = 'SYSTEM_ALERT',
+  NEW_ORDER = 'NEW_ORDER',
 }
 
 export enum NotificationPriority {
   LOW = 'LOW',
   NORMAL = 'NORMAL',
   HIGH = 'HIGH',
-  URGENT = 'URGENT'
+  URGENT = 'URGENT',
 }
 
 export interface Notification {
   id: string;
   userId: string;
-  title: string;
-  message: string;
   type: NotificationType;
-  isRead: boolean;
   priority: NotificationPriority;
-  metadata?: any;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface NotificationCreateInput {
-  userId: string;
   title: string;
   message: string;
-  type: NotificationType;
-  priority?: NotificationPriority;
-  metadata?: any;
+  isRead: boolean;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+  data?: Record<string, unknown>;
 }
 
 export interface NotificationFilters {
-  type?: NotificationType;
-  isRead?: boolean;
-  search?: string;
   page?: number;
   limit?: number;
-  sortBy?: 'createdAt' | 'priority';
+  sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  type?: string;
+  isRead?: boolean;
+  search?: string;
 }
 
 export interface NotificationResponse {
   notifications: Notification[];
+  unreadCount: number;
   total: number;
   page: number;
   totalPages: number;
-  unreadCount: number;
+}
+
+export interface NotificationCreateInput {
+  userId: string;
+  type: NotificationType;
+  priority?: NotificationPriority;
+  title: string;
+  message: string;
+  metadata?: Record<string, unknown>;
+  data?: Record<string, unknown>;
 }
 
 export interface BulkActionPayload {

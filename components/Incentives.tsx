@@ -1,51 +1,143 @@
-// Incentives component - REDESIGNED with Purple theme
 "use client";
 
-import { incentives } from '@/lib/utils'
-import Image from 'next/image'
-import React from 'react'
-import { Truck, RotateCcw, HeadphonesIcon, Shield, CreditCard, Package } from 'lucide-react'
+import { Package, Headphones, ShoppingCart } from 'lucide-react';
+import { motion } from 'framer-motion';
 
-const iconMap: Record<string, React.ElementType> = {
-  '/free-shipping.png': Truck,
-  '/money-back.png': RotateCcw,
-  '/support.png': HeadphonesIcon,
-  '/guarantee.png': Shield,
-  '/secure-payment.png': CreditCard,
-  '/fast-delivery.png': Package,
-}
+const features = [
+  {
+    icon: Package,
+    title: 'Free Shipping',
+    description: 'Enjoy complimentary delivery on all orders. No hidden fees, no minimum spend - straight to your doorstep.',
+    color: 'from-blue-500 to-cyan-500',
+    delay: 0,
+  },
+  {
+    icon: Headphones,
+    title: '24/7 Customer Support',
+    description: 'Our dedicated support team is available around the clock to help you with any questions or concerns.',
+    color: 'from-purple-500 to-pink-500',
+    delay: 0.2,
+  },
+  {
+    icon: ShoppingCart,
+    title: 'Seamless Checkout',
+    description: 'A streamlined, secure checkout experience designed to get you from cart to confirmation in seconds.',
+    color: 'from-orange-500 to-red-500',
+    delay: 0.4,
+  },
+];
 
-const Incentives = () => {
+export function Incentives() {
   return (
-    <div className="bg-white py-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">Why Shop With Us</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {incentives.map((incentive) => {
-            const IconComponent = iconMap[incentive.imageSrc] || Package;
+    <section className="py-20 bg-gradient-to-b from-gray-50 via-purple-50 to-white relative overflow-hidden">
+      {/* Animated background shapes */}
+      <div className="absolute inset-0 overflow-hidden">
+        <motion.div
+          className="absolute top-20 left-10 w-72 h-72 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30"
+          animate={{
+            x: [0, 100, 0],
+            y: [0, 50, 0],
+          }}
+          transition={{
+            duration: 20,
+            repeat: Infinity,
+            ease: "linear"
+          }}
+        />
+        <motion.div
+          className="absolute bottom-20 right-10 w-72 h-72 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30"
+          animate={{
+            x: [0, -100, 0],
+            y: [0, -50, 0],
+          }}
+          transition={{
+            duration: 15,
+            repeat: Infinity,
+            ease: "linear"
+          }}
+        />
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 relative z-10">
+        <motion.h2
+          className="text-4xl font-extrabold text-center mb-4"
+          initial={{ opacity: 0, y: -30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+        >
+          Why Shop With Us
+        </motion.h2>
+
+        <motion.p
+          className="text-center text-gray-600 mb-16 max-w-2xl mx-auto"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+        >
+          Experience the best online shopping with our amazing features
+        </motion.p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+          {features.map((feature) => {
+            const Icon = feature.icon;
             return (
-              <div 
-                key={incentive.name} 
-                className="flex flex-col items-center text-center p-6 rounded-2xl hover:bg-purple-50 transition-colors group"
+              <motion.div
+                key={feature.title}
+                className="text-center group"
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: feature.delay }}
               >
-                <div className="w-16 h-16 bg-gradient-to-br from-purple-100 to-cyan-100 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <Image 
-                    width={32} 
-                    height={32} 
-                    src={incentive.imageSrc} 
-                    alt={incentive.name}
-                    className="w-8 h-8"
+                <motion.div
+                  className="relative inline-block mb-6"
+                  whileHover={{ scale: 1.1, rotate: 360 }}
+                  transition={{ duration: 0.6 }}
+                >
+                  {/* Animated ring */}
+                  <motion.div
+                    className={`absolute inset-0 bg-gradient-to-br ${feature.color} rounded-full blur-xl opacity-50`}
+                    animate={{
+                      scale: [1, 1.2, 1],
+                      opacity: [0.5, 0.8, 0.5],
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                    }}
                   />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">{incentive.name}</h3>
-                <p className="text-sm text-gray-500">{incentive.description}</p>
-              </div>
+
+                  {/* Icon container */}
+                  <div className={`relative w-24 h-24 bg-gradient-to-br ${feature.color} rounded-full flex items-center justify-center shadow-2xl`}>
+                    <Icon className="w-12 h-12 text-white" />
+                  </div>
+                </motion.div>
+
+                <motion.h3
+                  className="text-2xl font-bold mb-4 group-hover:text-purple-600 transition-colors"
+                  whileHover={{ scale: 1.05 }}
+                >
+                  {feature.title}
+                </motion.h3>
+
+                <motion.p
+                  className="text-gray-600 leading-relaxed max-w-sm mx-auto"
+                  initial={{ opacity: 0 }}
+                  whileInView={{ opacity: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.6, delay: feature.delay + 0.2 }}
+                >
+                  {feature.description}
+                </motion.p>
+              </motion.div>
             );
           })}
         </div>
       </div>
-    </div>
+    </section>
   );
-};
+}
 
 export default Incentives;

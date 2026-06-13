@@ -1,5 +1,18 @@
+/**
+ * Notifications Routes with Authentication
+ * 
+ * Provides secure notification endpoints:
+ * - GET /api/notifications/:userId - Authenticated (own notifications)
+ * - POST /api/notifications - Admin only (create notification)
+ * - PUT /api/notifications/:id - Authenticated (update own notification)
+ * - DELETE /api/notifications/:id - Authenticated (delete own notification)
+ * 
+ * @module routes/notifications
+ */
+
 const express = require('express');
 const router = express.Router();
+
 const {
   getUserNotifications,
   createNotification,
@@ -10,25 +23,59 @@ const {
   getUnreadCount
 } = require('../controllers/notificationController');
 
-// GET /api/notifications/:userId/unread-count - Get unread notification count
-router.get('/:userId/unread-count', getUnreadCount);
+const { authenticate, requireAdmin } = require('../middleware/auth');
 
-// GET /api/notifications/:userId - Get user notifications with filtering and pagination
-router.get('/:userId', getUserNotifications);
+// ============================================================
+// AUTHENTICATED ROUTES
+// ============================================================
 
-// POST /api/notifications - Create new notification
-router.post('/', createNotification);
+/**
+ * GET /api/notifications/:userId/unread-count
+ * Get unread notification count
+ * Authenticated user (own count)
+ */
+router.get('/:userId/unread-count', authenticate, getUnreadCount);
 
-// POST /api/notifications/mark-read - Bulk mark notifications as read
-router.post('/mark-read', bulkMarkAsRead);
+/**
+ * GET /api/notifications/:userId
+ * Get user notifications
+ * Authenticated user (own notifications)
+ */
+router.get('/:userId', authenticate, getUserNotifications);
 
-// DELETE /api/notifications/bulk - Bulk delete notifications
-router.delete('/bulk', bulkDeleteNotifications);
+/**
+ * POST /api/notifications
+ * Create new notification (internal use, typically from other services)
+ * Admin only
+ */
+router.post('/', authenticate, requireAdmin, createNotification);
 
-// PUT /api/notifications/:id - Update notification (mark as read/unread)
-router.put('/:id', updateNotification);
+/**
+ * POST /api/notifications/mark-read
+ * Bulk mark notifications as read
+ * Authenticated user (own notifications)
+ */
+router.post('/mark-read', authenticate, bulkMarkAsRead);
 
-// DELETE /api/notifications/:id - Delete single notification
-router.delete('/:id', deleteNotification);
+/**
+ * DELETE /api/notifications/bulk
+ * Bulk delete notifications
+ * Authenticated user (own notifications)
+ */
+router.delete('/bulk', authenticate, bulkDeleteNotifications);
+
+/**
+ * PUT /api/notifications/:id
+ * Update notification (mark as read/unread)
+ * Authenticated user (own notification)
+ */
+router.put('/:id', authenticate, updateNotification);
+
+/**
+ * DELETE /api/notifications/:id
+ * Delete single notification
+ * Authenticated user (own notification)
+ */
+router.delete('/:id', authenticate, deleteNotification);
 
 module.exports = router;

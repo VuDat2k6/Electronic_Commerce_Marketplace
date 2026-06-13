@@ -9,12 +9,21 @@
  * - Getting unread count
  * 
  * Notifications keep users informed about order updates,
- * payment status, promotions, and system alerts.
+ * payment status, promotions, system alerts, and new seller orders.
  * 
  * @module controllers/notificationController
  */
 
-const prisma = require('../utills/db');
+const prisma = require('../utils/db');
+
+function canAccessMailbox(req, res, requestedUserId) {
+  if (!req.user || requestedUserId !== req.user.id) {
+    res.status(403).json({ error: 'You can only access your own notifications' });
+    return false;
+  }
+
+  return true;
+}
 
 /**
  * GET /api/notifications/user/:userId
@@ -37,6 +46,7 @@ const prisma = require('../utills/db');
 const getUserNotifications = async (req, res) => {
   try {
     const { userId } = req.params;
+    if (!canAccessMailbox(req, res, userId)) return;
     const {
       type,
       isRead,
@@ -121,7 +131,7 @@ const getUserNotifications = async (req, res) => {
  * - userId: Target user ID (required)
  * - title: Notification title (required)
  * - message: Notification message (required)
- * - type: Notification type (required) - ORDER_UPDATE, PAYMENT_STATUS, PROMOTION, SYSTEM_ALERT
+ * - type: Notification type (required) - ORDER_UPDATE, PAYMENT_STATUS, PROMOTION, SYSTEM_ALERT, NEW_ORDER
  * - priority: Priority level (optional, default: NORMAL) - LOW, NORMAL, HIGH, URGENT
  * - metadata: Additional JSON data (optional)
  * 
@@ -130,7 +140,7 @@ const getUserNotifications = async (req, res) => {
  */
 const createNotification = async (req, res) => {
   try {
-    const { userId, title, message, type, priority = 'NORMAL', metadata } = req.body;
+    const { userId, title, message, type, priority = 'NORMAL', metadata, data } = req.body;
 
     // Validate required fields
     if (!userId || !title || !message || !type) {
@@ -140,7 +150,7 @@ const createNotification = async (req, res) => {
     }
 
     // Validate enum values against allowed values
-    const validTypes = ['ORDER_UPDATE', 'PAYMENT_STATUS', 'PROMOTION', 'SYSTEM_ALERT'];
+    const validTypes = ['ORDER_UPDATE', 'PAYMENT_STATUS', 'PROMOTION', 'SYSTEM_ALERT', 'NEW_ORDER'];
     const validPriorities = ['LOW', 'NORMAL', 'HIGH', 'URGENT'];
 
     if (!validTypes.includes(type)) {
@@ -168,7 +178,7 @@ const createNotification = async (req, res) => {
         message,
         type,
         priority,
-        metadata
+        metadata: metadata ?? data ?? null
       }
     });
 
@@ -192,20 +202,16 @@ const createNotification = async (req, res) => {
 const updateNotification = async (req, res) => {
   try {
     const { id } = req.params;
-    const { isRead, userId } = req.body;
+    const { isRead } = req.body;
 
     // Validate isRead is boolean
     if (typeof isRead !== 'boolean') {
       return res.status(400).json({ error: 'isRead must be a boolean value' });
     }
 
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-
     // Security: verify notification belongs to user
     const existingNotification = await prisma.notification.findFirst({
-      where: { id, userId }
+      where: { id, userId: req.user.id }
     });
 
     if (!existingNotification) {
@@ -245,22 +251,18 @@ const updateNotification = async (req, res) => {
  */
 const bulkMarkAsRead = async (req, res) => {
   try {
-    const { notificationIds, userId } = req.body;
+    const { notificationIds } = req.body;
 
     // Validate input
     if (!Array.isArray(notificationIds) || notificationIds.length === 0) {
       return res.status(400).json({ error: 'notificationIds must be a non-empty array' });
     }
 
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-
     // Update notifications with security check
     const updateResult = await prisma.notification.updateMany({
       where: {
         id: { in: notificationIds },
-        userId: userId // Security: only update user's own notifications
+        userId: req.user.id
       },
       data: { isRead: true }
     });
@@ -288,11 +290,9 @@ const bulkMarkAsRead = async (req, res) => {
 const deleteNotification = async (req, res) => {
   try {
     const { id } = req.params;
-    const { userId } = req.body;
-
     // Security: verify notification belongs to user
     const notification = await prisma.notification.findFirst({
-      where: { id, userId }
+      where: { id, userId: req.user.id }
     });
 
     if (!notification) {
@@ -326,22 +326,18 @@ const deleteNotification = async (req, res) => {
  */
 const bulkDeleteNotifications = async (req, res) => {
   try {
-    const { notificationIds, userId } = req.body;
+    const { notificationIds } = req.body;
 
     // Validate input
     if (!Array.isArray(notificationIds) || notificationIds.length === 0) {
       return res.status(400).json({ error: 'notificationIds must be a non-empty array' });
     }
 
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-
     // Delete notifications with security check
     const deleteResult = await prisma.notification.deleteMany({
       where: {
         id: { in: notificationIds },
-        userId: userId // Security: only delete user's own notifications
+        userId: req.user.id
       }
     });
 
@@ -368,6 +364,7 @@ const bulkDeleteNotifications = async (req, res) => {
 const getUnreadCount = async (req, res) => {
   try {
     const { userId } = req.params;
+    if (!canAccessMailbox(req, res, userId)) return;
 
     const unreadCount = await prisma.notification.count({
       where: { userId, isRead: false }

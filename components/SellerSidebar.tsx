@@ -1,75 +1,70 @@
-// SellerSidebar component - REDESIGNED with Purple-Cyan theme
+// SellerSidebar - Modern design with gradient purple-pink theme
 "use client";
 
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MdDashboard } from "react-icons/md";
-import {
-  FaTable,
-  FaBagShopping,
-  FaUpload,
-  FaGear,
-  FaChartLine,
-  FaTag,
-} from "react-icons/fa6";
+import { LayoutDashboard, BarChart3, Package, ShoppingBag, Tag, Upload, Settings, ArrowLeft, Star } from "lucide-react";
 
 const navItems = [
-  { href: "/seller/dashboard", label: "Dashboard", icon: MdDashboard },
-  { href: "/seller/analytics", label: "Analytics", icon: FaChartLine },
-  { href: "/seller/products", label: "Products", icon: FaTable },
-  { href: "/seller/orders", label: "Orders", icon: FaBagShopping },
-  { href: "/seller/vouchers", label: "Voucher", icon: FaTag },
-  { href: "/seller/bulk-upload", label: "Bulk Upload", icon: FaUpload },
-  { href: "/seller/settings", label: "Shop Settings", icon: FaGear },
+  { href: "/seller/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/seller/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/seller/products", label: "Products", icon: Package },
+  { href: "/seller/orders", label: "Orders", icon: ShoppingBag },
+  { href: "/seller/reviews", label: "Reviews", icon: Star },
+  { href: "/seller/vouchers", label: "Vouchers", icon: Tag },
+  { href: "/seller/bulk-upload", label: "Bulk Upload", icon: Upload },
+  { href: "/seller/settings", label: "Settings", icon: Settings },
 ];
 
 const SellerSidebar = () => {
   const pathname = usePathname();
 
   return (
-    <div className="xl:w-[280px] bg-gradient-to-b from-purple-700 to-purple-900 h-full max-xl:w-full flex-shrink-0 relative">
-      {/* Logo */}
-      <div className="px-6 py-6 border-b border-purple-600/30">
+    <aside className="w-64 bg-gradient-to-b from-purple-700 to-purple-900 h-screen sticky top-0 flex flex-col">
+      {/* Header */}
+      <div className="px-6 py-6 border-b border-purple-500/30">
         <Link href="/seller/dashboard" className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-            <MdDashboard className="text-2xl text-white" />
+          <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+            <LayoutDashboard className="w-5 h-5 text-white" />
           </div>
-          <span className="text-xl font-bold text-white">Seller</span>
+          <div>
+            <span className="font-bold text-white text-lg">Seller</span>
+            <p className="text-xs text-purple-200">Dashboard</p>
+          </div>
         </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="p-4 space-y-1">
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname.startsWith(item.href);
+          const isActive = pathname === item.href || (item.href !== "/seller/dashboard" && pathname.startsWith(item.href));
           return (
             <Link key={item.href} href={item.href}>
               <div
-                className={`flex gap-3 w-full cursor-pointer items-center py-3 px-4 text-white rounded-xl transition-all duration-200
-                ${isActive 
-                  ? "bg-white/20 border-l-4 border-cyan-400" 
-                  : "hover:bg-white/10"}`}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                  isActive
+                    ? "bg-white/20 text-white border-l-4 border-pink-400"
+                    : "text-purple-200 hover:bg-white/10 hover:text-white"
+                }`}
               >
-                <Icon className="text-xl flex-shrink-0" />
-                <span className="font-medium">{item.label}</span>
+                <Icon className="w-5 h-5" />
+                {item.label}
               </div>
             </Link>
           );
         })}
       </nav>
 
-      {/* Back to Home */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-purple-600/30">
-        <Link href="/" className="flex items-center gap-3 px-4 py-3 text-white/60 hover:text-white hover:bg-white/10 rounded-xl transition-all duration-200">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 17l-5-5m0 0l5-5m-5 5h12" />
-          </svg>
-          <span className="font-medium">Back to Home</span>
+      {/* Footer */}
+      <div className="p-4 border-t border-purple-500/30">
+        <Link href="/" className="flex items-center gap-3 px-4 py-3 text-purple-200 hover:text-white hover:bg-white/10 rounded-xl transition-all">
+          <ArrowLeft className="w-5 h-5" />
+          Back to Store
         </Link>
       </div>
-    </div>
+    </aside>
   );
 };
 

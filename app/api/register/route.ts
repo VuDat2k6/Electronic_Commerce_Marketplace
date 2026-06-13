@@ -14,7 +14,7 @@ export const POST = async (request: Request) => {
                     "unknown";
 
     // Check rate limit
-    if (!commonValidations.checkRateLimit(clientIP, 5, 15 * 60 * 1000)) {
+    if (!commonValidations.checkRateLimit(clientIP, 100, 15 * 60 * 1000)) {
       throw new AppError("Too many registration attempts. Please try again later.", 429);
     }
 

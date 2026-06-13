@@ -1,4 +1,4 @@
-const prisma = require("../utills/db"); /**
+const prisma = require("../utils/db"); /**
  * Handle a request for a product identified by its slug and return the product including its category.
  *
  * Validates the `slug` route parameter (must be a string of length ≤ 200). Responds with 400 and `{ error: "Invalid slug" }` for invalid input, 404 and `{ error: "Product not found" }` if no matching product exists, or 200 with the product object (including its `category`) on success.
@@ -13,10 +13,20 @@ async function getProductBySlug(request, response) {
   }
 
   // Use findUnique instead of findMany for better performance
-  const product = await prisma.product.findUnique({
-    where: { slug: slug },
+  const product = await prisma.product.findFirst({
+    where: {
+      slug: slug,
+      status: "PUBLISHED",
+      seller: {
+        is: {
+          role: "seller",
+          shopStatus: "ACTIVE",
+        },
+      },
+    },
     include: {
-      category: true
+      category: true,
+      seller: { select: { id: true, shopName: true } }
     }
   });
 
@@ -55,10 +65,18 @@ async function getProductsBySlugs(request, response) {
   // Fetch all products in a single query
   const products = await prisma.product.findMany({
     where: {
-      slug: { in: slugArray }
+      slug: { in: slugArray },
+      status: "PUBLISHED",
+      seller: {
+        is: {
+          role: "seller",
+          shopStatus: "ACTIVE",
+        },
+      },
     },
     include: {
-      category: { select: { id: true, name: true } }
+      category: { select: { id: true, name: true } },
+      seller: { select: { id: true, shopName: true } }
     }
   });
 

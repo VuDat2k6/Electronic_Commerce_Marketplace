@@ -1,91 +1,75 @@
 /**
- * Products Controller
+ * Products Controller with Authentication and IDOR Protection
  * 
  * Handles all product-related operations including:
- * - Listing products with filtering, sorting, and pagination
- * - CRUD operations (Create, Read, Update, Delete)
- * - Search functionality
+ * - Listing products with filtering, sorting, and pagination (public)
+ * - CRUD operations (authenticated seller/admin only)
+ * - Search functionality (public)
+ * 
+ * Security measures:
+ * - sellerId comes from JWT token, not request body
+ * - Sellers can only modify their own products
+ * - Admins can modify any product
  * 
  * @module controllers/products
  */
 
-const prisma = require("../utills/db"); // Shared database connection with SSL support
-const { asyncHandler, handleServerError, AppError } = require("../utills/errorHandler");
+const prisma = require("../utils/db");
+const { asyncHandler, AppError } = require("../utils/errorHandler");
+const { ROLES } = require("../middleware/auth");
 
 // ============================================================
 // SECURITY WHITELISTS
-// Define allowed values to prevent injection attacks
 // ============================================================
 
-/**
- * Allowed filter types for product queries
- * Prevents SQL injection through query parameters
- */
 const ALLOWED_FILTER_TYPES = ['price', 'rating', 'category', 'inStock', 'outOfStock'];
-
-/**
- * Allowed comparison operators for filtering
- * Limits what operators can be used in queries
- */
 const ALLOWED_OPERATORS = ['gte', 'lte', 'gt', 'lt', 'equals', 'contains'];
-
-/**
- * Allowed sort values
- * Prevents arbitrary sorting that could cause performance issues
- */
 const ALLOWED_SORT_VALUES = ['defaultSort', 'titleAsc', 'titleDesc', 'lowPrice', 'highPrice'];
+const ALLOWED_PRODUCT_STATUSES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
+const ALLOWED_WARNING_TYPES = [
+  'POLICY_VIOLATION',
+  'MISLEADING_INFORMATION',
+  'COUNTERFEIT_RISK',
+  'PROHIBITED_ITEM',
+  'IMAGE_OR_BRAND_MISUSE',
+  'OTHER',
+];
+const ALLOWED_WARNING_PRIORITIES = ['NORMAL', 'HIGH', 'URGENT'];
 
 // ============================================================
-// INPUT VALIDATION FUNCTIONS
-// Validate and sanitize user input before database queries
+// HELPER FUNCTIONS
 // ============================================================
 
-/**
- * Validates if a filter type is in the allowed list
- * @param {string} filterType - The filter type to validate
- * @returns {boolean} True if valid, false otherwise
- */
 function validateFilterType(filterType) {
   return ALLOWED_FILTER_TYPES.includes(filterType);
 }
 
-/**
- * Validates if an operator is in the allowed list
- * @param {string} operator - The operator to validate
- * @returns {boolean} True if valid, false otherwise
- */
 function validateOperator(operator) {
   return ALLOWED_OPERATORS.includes(operator);
 }
 
-/**
- * Validates if a sort value is in the allowed list
- * @param {string} sortValue - The sort value to validate
- * @returns {boolean} True if valid, false otherwise
- */
 function validateSortValue(sortValue) {
   return ALLOWED_SORT_VALUES.includes(sortValue);
 }
 
-/**
- * Validates and sanitizes filter values based on their type
- * Converts string values to appropriate types for database queries
- * 
- * @param {string} filterType - Type of filter (price, rating, category, etc.)
- * @param {any} filterValue - The value to sanitize
- * @returns {number|string|null} Sanitized value or null if invalid
- */
+function requireWholeNumber(value, fieldName, minimum) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < minimum) {
+    const requirement = minimum === 1 ? 'a positive whole VND amount' : 'a non-negative whole number';
+    throw new AppError(`${fieldName} must be ${requirement}`, 400);
+  }
+  return parsed;
+}
+
 function validateAndSanitizeFilterValue(filterType, filterValue) {
   switch (filterType) {
     case 'price':
     case 'rating':
     case 'inStock':
     case 'outOfStock':
-      // Convert to integer for numeric filters
       const numValue = parseInt(filterValue);
       return isNaN(numValue) ? null : numValue;
     case 'category':
-      // For category, ensure it's a non-empty string
       return typeof filterValue === 'string' && filterValue.trim().length > 0 
         ? filterValue.trim() 
         : null;
@@ -94,37 +78,16 @@ function validateAndSanitizeFilterValue(filterType, filterValue) {
   }
 }
 
-/**
- * Builds a safe filter object from an array of filter parameters
- * Validates each parameter before adding to the filter object
- * 
- * @param {Array} filterArray - Array of filter objects {filterType, filterOperator, filterValue}
- * @returns {Object} Validated filter object for Prisma query
- */
 function buildSafeFilterObject(filterArray) {
   const filterObj = {};
   
   for (const item of filterArray) {
-    // Validate filter type against whitelist
-    if (!validateFilterType(item.filterType)) {
-      console.warn(`Invalid filter type: ${item.filterType}`);
-      continue;
-    }
+    if (!validateFilterType(item.filterType)) continue;
+    if (!validateOperator(item.filterOperator)) continue;
     
-    // Validate operator against whitelist
-    if (!validateOperator(item.filterOperator)) {
-      console.warn(`Invalid operator: ${item.filterOperator}`);
-      continue;
-    }
-    
-    // Validate and sanitize filter value
     const sanitizedValue = validateAndSanitizeFilterValue(item.filterType, item.filterValue);
-    if (sanitizedValue === null) {
-      console.warn(`Invalid filter value for ${item.filterType}: ${item.filterValue}`);
-      continue;
-    }
+    if (sanitizedValue === null) continue;
     
-    // Build filter object with validated parameters
     filterObj[item.filterType] = {
       [item.filterOperator]: sanitizedValue,
     };
@@ -133,259 +96,200 @@ function buildSafeFilterObject(filterArray) {
   return filterObj;
 }
 
+function activeSellerFilter() {
+  return {
+    seller: {
+      is: {
+        role: ROLES.SELLER,
+        shopStatus: 'ACTIVE',
+      },
+    },
+  };
+}
+
+/**
+ * Get seller ID from authenticated user
+ * Prevents IDOR by using token instead of request body
+ */
+function getSellerIdFromRequest(req) {
+  if (req.user.role === ROLES.SELLER) {
+    return req.user.id;
+  }
+  if (req.user.role === ROLES.ADMIN && req.body.sellerId) {
+    return req.body.sellerId;
+  }
+  return req.user.id;
+}
+
+/**
+ * Verify seller can modify product (IDOR protection)
+ */
+async function verifyProductOwnership(req, productId) {
+  const user = req.user;
+  
+  if (user.role === ROLES.ADMIN) return;
+  
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { sellerId: true }
+  });
+  
+  if (!product) {
+    throw new AppError('Product not found', 404);
+  }
+  
+  if (product.sellerId !== user.id) {
+    throw new AppError('You do not have permission to modify this product', 403);
+  }
+}
+
 // ============================================================
 // PRODUCT CONTROLLER FUNCTIONS
-// Main business logic for product operations
 // ============================================================
 
 /**
  * GET /api/products
- * 
- * Retrieves all products with optional filtering, sorting, and pagination
- * 
- * Query Parameters:
- * - mode=admin: Returns all products without pagination/filtering (for admin panel)
- * - page: Page number for pagination (default: 1)
- * - filters[filterType][$operator]=value: Filter products
- * - sort=value: Sort order (titleAsc, titleDesc, lowPrice, highPrice)
- * 
- * @param {Request} request - Express request object
- * @param {Response} response - Express response object
+ * Public - list products with filtering, sorting, pagination
  */
 const getAllProducts = asyncHandler(async (request, response) => {
   const mode = request.query.mode || "";
 
-  // Admin mode: Return products with pagination (max 100 per page)
-  // Used in admin dashboard with paginated results
-  if(mode === "admin"){
+  if (mode === "admin") {
     const page = Math.max(parseInt(request.query.page) || 1, 1);
     const limit = Math.min(parseInt(request.query.limit) || 50, 100);
     const skip = (page - 1) * limit;
+    const searchTerm = typeof request.query.search === 'string'
+      ? request.query.search.trim().slice(0, 100)
+      : '';
+    const requestedStatus = String(request.query.status || '').toUpperCase();
+    const status = ALLOWED_PRODUCT_STATUSES.includes(requestedStatus) ? requestedStatus : null;
+    const where = {
+      ...(status ? { status } : {}),
+      ...(searchTerm ? {
+        OR: [
+          { title: { contains: searchTerm } },
+          { slug: { contains: searchTerm } },
+          { manufacturer: { contains: searchTerm } },
+          { seller: { is: { shopName: { contains: searchTerm } } } },
+        ],
+      } : {}),
+    };
 
     const [adminProducts, total] = await Promise.all([
       prisma.product.findMany({
+        where,
         skip,
         take: limit,
         include: {
           category: { select: { id: true, name: true } },
-          seller: { select: { id: true, shopName: true } }
+          seller: { select: { id: true, email: true, shopName: true } }
         },
         orderBy: { createdAt: 'desc' }
       }),
-      prisma.product.count()
+      prisma.product.count({ where })
     ]);
 
     return response.json({
       products: adminProducts,
       pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit)
+        page, limit, total, totalPages: Math.ceil(total / limit)
       }
     });
-  } else {
-    // Customer mode: Apply filtering, sorting, and pagination
-    const dividerLocation = request.url.indexOf("?");
-    let filterObj = {};
-    let sortObj = {};
-    let sortByValue = "defaultSort";
-
-    // Parse and validate page number
-    const page = Number(request.query.page);
-    const validatedPage = (page && page > 0) ? page : 1;
-
-    // Parse query string for filter and sort parameters
-    if (dividerLocation !== -1) {
-      const queryArray = request.url
-        .substring(dividerLocation + 1, request.url.length)
-        .split("&");
-
-      let filterType;
-      let filterArray = [];
-
-      // Process each query parameter
-      for (let i = 0; i < queryArray.length; i++) {
-        const queryParam = queryArray[i];
-        
-        // Extract filter type from parameter name
-        if (queryParam.includes("filters")) {
-          if (queryParam.includes("price")) {
-            filterType = "price";
-          } else if (queryParam.includes("rating")) {
-            filterType = "rating";
-          } else if (queryParam.includes("category")) {
-            filterType = "category";
-          } else if (queryParam.includes("inStock")) {
-            filterType = "inStock";
-          } else if (queryParam.includes("outOfStock")) {
-            filterType = "outOfStock";
-          } else {
-            // Skip unknown filter types for security
-            continue;
-          }
-        }
-
-        // Extract and validate sort parameter
-        if (queryParam.includes("sort")) {
-          const extractedSortValue = queryParam.substring(queryParam.indexOf("=") + 1);
-          if (validateSortValue(extractedSortValue)) {
-            sortByValue = extractedSortValue;
-          }
-        }
-
-        // Extract filter parameters (type, operator, value)
-        if (queryParam.includes("filters") && filterType) {
-          let filterValue;
-          
-          // Extract filter value based on type
-          if (filterType === "category") {
-            // Category values are strings
-            filterValue = queryParam.substring(queryParam.indexOf("=") + 1);
-          } else {
-            // Numeric values (price, rating, stock)
-            const numValue = parseInt(queryParam.substring(queryParam.indexOf("=") + 1));
-            filterValue = isNaN(numValue) ? null : numValue;
-          }
-
-          // Extract operator from between $ and =
-          const operatorStart = queryParam.indexOf("$") + 1;
-          const operatorEnd = queryParam.indexOf("=") - 1;
-          
-          if (operatorStart > 0 && operatorEnd > operatorStart) {
-            const filterOperator = queryParam.substring(operatorStart, operatorEnd);
-            
-            // Add to filter array if all values are valid
-            if (filterValue !== null && filterOperator) {
-              filterArray.push({ 
-                filterType, 
-                filterOperator, 
-                filterValue 
-              });
-            }
-          }
-        }
-      }
-      
-      // Build validated filter object
-      filterObj = buildSafeFilterObject(filterArray);
-    }
-
-    // Build WHERE clause from filter object
-    let whereClause = { ...filterObj };
-
-    // Handle category filter separately (requires join)
-    if (filterObj.category && filterObj.category.equals) {
-      delete whereClause.category;
-    }
-
-    // Build sort object based on sort value
-    switch (sortByValue) {
-      case "defaultSort":
-        sortObj = {};
-        break;
-      case "titleAsc":
-        sortObj = { title: "asc" };
-        break;
-      case "titleDesc":
-        sortObj = { title: "desc" };
-        break;
-      case "lowPrice":
-        sortObj = { price: "asc" };
-        break;
-      case "highPrice":
-        sortObj = { price: "desc" };
-        break;
-      default:
-        sortObj = {};
-    }
-
-    // Execute database query with or without filters
-    let products;
-
-    if (Object.keys(filterObj).length === 0) {
-      // No filters - simple query with pagination
-      products = await prisma.product.findMany({
-        skip: (validatedPage - 1) * 12,
-        take: 12,
-        include: {
-          category: {
-            select: {
-              name: true,
-            },
-          },
-        },
-        orderBy: sortObj,
-      });
-    } else {
-      // Has filters - apply WHERE clause
-      if (filterObj.category && filterObj.category.equals) {
-        // Category filter requires relation query
-        products = await prisma.product.findMany({
-          skip: (validatedPage - 1) * 12,
-          take: 12,
-          include: {
-            category: {
-              select: {
-                name: true,
-              },
-            },
-          },
-          where: {
-            ...whereClause,
-            category: {
-              name: {
-                equals: filterObj.category.equals,
-              },
-            },
-          },
-          orderBy: sortObj,
-        });
-      } else {
-        // Numeric filters
-        products = await prisma.product.findMany({
-          skip: (validatedPage - 1) * 12,
-          take: 12,
-          include: {
-            category: {
-              select: {
-                name: true,
-              },
-            },
-          },
-          where: whereClause,
-          orderBy: sortObj,
-        });
-      }
-    }
-
-    return response.json(products);
   }
+
+  const dividerLocation = request.url.indexOf("?");
+  let filterObj = {};
+  let sortObj = {};
+  let sortByValue = "defaultSort";
+
+  const page = Number(request.query.page);
+  const validatedPage = (page && page > 0) ? page : 1;
+
+  if (dividerLocation !== -1) {
+    const searchParams = new URLSearchParams(
+      request.url.substring(dividerLocation + 1, request.url.length)
+    );
+    let filterArray = [];
+
+    const requestedSort = searchParams.get("sort");
+    if (requestedSort && validateSortValue(requestedSort)) {
+      sortByValue = requestedSort;
+    }
+
+    for (const [key, rawValue] of searchParams.entries()) {
+      const match = key.match(/^filters\[([^\]]+)\]\[\$([^\]]+)\]$/);
+      if (!match) continue;
+
+      const [, filterType, filterOperator] = match;
+      let filterValue;
+
+      if (filterType === "category") {
+        filterValue = rawValue;
+      } else {
+        const numValue = parseInt(rawValue, 10);
+        filterValue = isNaN(numValue) ? null : numValue;
+      }
+
+      if (filterValue !== null && filterOperator) {
+        filterArray.push({ filterType, filterOperator, filterValue });
+      }
+    }
+
+    filterObj = buildSafeFilterObject(filterArray);
+  }
+
+  let whereClause = { status: 'PUBLISHED', ...activeSellerFilter(), ...filterObj };
+  if (filterObj.category && filterObj.category.equals) {
+    delete whereClause.category;
+  }
+
+  switch (sortByValue) {
+    case "titleAsc": sortObj = { title: "asc" }; break;
+    case "titleDesc": sortObj = { title: "desc" }; break;
+    case "lowPrice": sortObj = { price: "asc" }; break;
+    case "highPrice": sortObj = { price: "desc" }; break;
+    default: sortObj = {};
+  }
+
+  let products;
+  const queryOptions = {
+    skip: (validatedPage - 1) * 12,
+    take: 12,
+    include: {
+      category: { select: { name: true } },
+      seller: { select: { id: true, shopName: true } },
+    },
+    orderBy: sortObj,
+    where: { status: 'PUBLISHED', ...activeSellerFilter() },
+  };
+
+  if (Object.keys(filterObj).length === 0) {
+    products = await prisma.product.findMany(queryOptions);
+  } else if (filterObj.category && filterObj.category.equals) {
+    products = await prisma.product.findMany({
+      ...queryOptions,
+      where: {
+        ...whereClause,
+        category: { name: { equals: filterObj.category.equals } },
+      },
+    });
+  } else {
+    products = await prisma.product.findMany({
+      ...queryOptions,
+      where: whereClause,
+    });
+  }
+
+  return response.json(products);
 });
 
 /**
  * POST /api/products
- * 
- * Creates a new product
- * 
- * Request Body:
- * - merchantId: ID of the seller/merchant
- * - slug: URL-friendly identifier
- * - title: Product name
- * - mainImage: Primary product image URL
- * - price: Product price (integer, in cents)
- * - description: Product description
- * - manufacturer: Manufacturer name
- * - categoryId: ID of the product category
- * - inStock: Number of items in stock
- * - status: Product status (default: "DRAFT")
- * 
- * @param {Request} request - Express request object with product data
- * @param {Response} response - Express response object
+ * Authenticated active seller only - uses sellerId from JWT token
  */
 const createProduct = asyncHandler(async (request, response) => {
+  const sellerId = getSellerIdFromRequest(request);
   const {
-    sellerId,
     slug,
     title,
     mainImage,
@@ -397,41 +301,42 @@ const createProduct = asyncHandler(async (request, response) => {
     status,
   } = request.body;
 
-  // Validate required fields
-  if (!title) {
-    throw new AppError("Missing required field: title", 400);
+  if (!title) throw new AppError("Missing required field: title", 400);
+  if (!slug) throw new AppError("Missing required field: slug", 400);
+  if (price === undefined || price === null) throw new AppError("Missing required field: price", 400);
+  if (!categoryId) throw new AppError("Missing required field: categoryId", 400);
+
+  const validatedPrice = requireWholeNumber(price, "price", 1);
+  const validatedStock = requireWholeNumber(inStock ?? 1, "inStock", 0);
+
+  // Verify seller exists and is approved
+  const seller = await prisma.user.findUnique({ where: { id: sellerId } });
+  if (!seller || seller.role !== ROLES.SELLER) {
+    throw new AppError("Invalid seller", 403);
+  }
+  if (seller.shopStatus !== 'ACTIVE' && seller.role !== ROLES.ADMIN) {
+    throw new AppError("Shop has not been approved yet", 403);
   }
 
-  if (!sellerId) {
-    throw new AppError("Missing required field: sellerId", 400);
+  // Check slug uniqueness
+  const existingSlug = await prisma.product.findUnique({ where: { slug } });
+  if (existingSlug) {
+    throw new AppError("Slug already exists", 400);
   }
 
-  if (!slug) {
-    throw new AppError("Missing required field: slug", 400);
-  }
-
-  if (price === undefined || price === null) {
-    throw new AppError("Missing required field: price", 400);
-  }
-
-  if (!categoryId) {
-    throw new AppError("Missing required field: categoryId", 400);
-  }
-
-  // Create product in database
   const product = await prisma.product.create({
     data: {
       sellerId,
       slug,
       title,
-      mainImage,
-      price,
-      rating: 5, // Default rating for new products
-      description,
-      manufacturer,
+      mainImage: mainImage || '',
+      price: validatedPrice,
+      rating: 5,
+      description: description || '',
+      manufacturer: manufacturer || '',
       categoryId,
-      inStock,
-      status: status || "DRAFT",
+      inStock: validatedStock,
+      status: status || "PUBLISHED",
     },
   });
 
@@ -440,17 +345,11 @@ const createProduct = asyncHandler(async (request, response) => {
 
 /**
  * PUT /api/products/:id
- * 
- * Updates an existing product
- * Only updates fields that are provided in the request body
- * 
- * @param {Request} request - Express request with product ID and update data
- * @param {Response} response - Express response object
+ * Authenticated active seller (own products) only
  */
 const updateProduct = asyncHandler(async (request, response) => {
   const { id } = request.params;
   const {
-    sellerId,
     slug,
     title,
     mainImage,
@@ -463,41 +362,40 @@ const updateProduct = asyncHandler(async (request, response) => {
     status,
   } = request.body;
 
-  // Validate product ID
-  if (!id) {
-    throw new AppError("Product ID is required", 400);
-  }
+  if (!id) throw new AppError("Product ID is required", 400);
 
-  // Check if product exists
-  const existingProduct = await prisma.product.findUnique({
-    where: {
-      id,
-    },
-  });
+  // Verify product exists
+  const existingProduct = await prisma.product.findUnique({ where: { id } });
+  if (!existingProduct) throw new AppError("Product not found", 404);
 
-  if (!existingProduct) {
-    throw new AppError("Product not found", 404);
+  // IDOR protection
+  await verifyProductOwnership(request, id);
+
+  const validatedPrice = price !== undefined ? requireWholeNumber(price, "price", 1) : undefined;
+  const validatedStock = inStock !== undefined ? requireWholeNumber(inStock, "inStock", 0) : undefined;
+
+  // Check slug uniqueness if changing
+  if (slug && slug !== existingProduct.slug) {
+    const slugExists = await prisma.product.findFirst({ 
+      where: { slug, id: { not: id } } 
+    });
+    if (slugExists) throw new AppError("Slug already exists", 400);
   }
 
   const updateData = {};
-
-  if (sellerId !== undefined) updateData.sellerId = sellerId;
   if (title !== undefined) updateData.title = title;
   if (mainImage !== undefined) updateData.mainImage = mainImage;
   if (slug !== undefined) updateData.slug = slug;
-  if (price !== undefined) updateData.price = price;
-  if (rating !== undefined) updateData.rating = rating;
+  if (price !== undefined) updateData.price = validatedPrice;
+  if (rating !== undefined) updateData.rating = parseInt(rating);
   if (description !== undefined) updateData.description = description;
   if (manufacturer !== undefined) updateData.manufacturer = manufacturer;
   if (categoryId !== undefined) updateData.categoryId = categoryId;
-  if (inStock !== undefined) updateData.inStock = inStock;
+  if (inStock !== undefined) updateData.inStock = validatedStock;
   if (status !== undefined) updateData.status = status;
 
-  // Update product with provided fields
   const updatedProduct = await prisma.product.update({
-    where: {
-      id,
-    },
+    where: { id },
     data: updateData,
   });
 
@@ -506,83 +404,142 @@ const updateProduct = asyncHandler(async (request, response) => {
 
 /**
  * DELETE /api/products/:id
- * 
- * Deletes a product from the database
- * Cannot delete products that have associated order records
- * 
- * @param {Request} request - Express request with product ID
- * @param {Response} response - Express response object
+ * Authenticated active seller (own products) only
  */
 const deleteProduct = asyncHandler(async (request, response) => {
   const { id } = request.params;
 
-  if (!id) {
-    throw new AppError("Product ID is required", 400);
+  if (!id) throw new AppError("Product ID is required", 400);
+
+  const existingProduct = await prisma.product.findUnique({ where: { id } });
+  if (!existingProduct) throw new AppError("Product not found", 404);
+
+  // IDOR protection
+  await verifyProductOwnership(request, id);
+
+  // Keep products referenced by either order implementation for order history.
+  const [relatedOrderItems, relatedSubOrderProducts] = await Promise.all([
+    prisma.order_item.count({ where: { productId: id } }),
+    prisma.subOrderProduct.count({ where: { productId: id } }),
+  ]);
+
+  if (relatedOrderItems > 0 || relatedSubOrderProducts > 0) {
+    // Archive instead of delete to preserve order history
+    await prisma.product.update({
+      where: { id },
+      data: { status: 'ARCHIVED', inStock: 0 }
+    });
+    return response.json({ 
+      message: 'Product has orders and has been archived instead of deleted',
+      archived: true 
+    });
   }
 
-  const existingProduct = await prisma.product.findUnique({
-    where: {
-      id,
-    },
-  });
-
-  if (!existingProduct) {
-    throw new AppError("Product not found", 404);
-  }
-
-  // Check for related order records using Order_item (not SubOrder)
-  // Products with orders cannot be deleted to maintain order history
-  const relatedOrderItems = await prisma.order_item.count({
-    where: {
-      productId: id,
-    },
-  });
-
-  if (relatedOrderItems > 0) {
-    throw new AppError("Cannot delete product because it has order records", 400);
-  }
-
-  // Delete product
-  await prisma.product.delete({
-    where: {
-      id,
-    },
-  });
-  
+  await prisma.product.delete({ where: { id } });
   return response.status(204).send();
 });
 
 /**
+ * GET /api/products/moderation/:id
+ * Admin only - retrieve product context for compliance review.
+ */
+const getModerationProduct = asyncHandler(async (request, response) => {
+  const { id } = request.params;
+  if (!id) throw new AppError("Product ID is required", 400);
+
+  const product = await prisma.product.findUnique({
+    where: { id },
+    include: {
+      category: { select: { id: true, name: true } },
+      seller: { select: { id: true, email: true, shopName: true, shopStatus: true } },
+      _count: { select: { orderItems: true, subOrderProducts: true, reviews: true } },
+    },
+  });
+
+  if (!product) throw new AppError("Product not found", 404);
+  return response.status(200).json(product);
+});
+
+/**
+ * POST /api/products/moderation/:id/warnings
+ * Admin only - notify the owning seller about a compliance issue.
+ */
+const sendProductViolationWarning = asyncHandler(async (request, response) => {
+  const { id } = request.params;
+  const reason = typeof request.body.reason === 'string' ? request.body.reason.trim() : '';
+  const requestedType = String(request.body.violationType || 'POLICY_VIOLATION').toUpperCase();
+  const requestedPriority = String(request.body.priority || 'HIGH').toUpperCase();
+
+  if (reason.length < 10 || reason.length > 1000) {
+    throw new AppError("Warning reason must be between 10 and 1000 characters", 400);
+  }
+
+  const violationType = ALLOWED_WARNING_TYPES.includes(requestedType) ? requestedType : 'OTHER';
+  const priority = ALLOWED_WARNING_PRIORITIES.includes(requestedPriority) ? requestedPriority : 'HIGH';
+  const product = await prisma.product.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      sellerId: true,
+      status: true,
+      seller: { select: { email: true } },
+    },
+  });
+
+  if (!product) throw new AppError("Product not found", 404);
+
+  const notification = await prisma.notification.create({
+    data: {
+      userId: product.sellerId,
+      title: `Compliance warning: ${product.title}`,
+      message: `Your listing "${product.title}" requires attention. ${reason} Please review the listing and update or remove it if necessary.`,
+      type: 'SYSTEM_ALERT',
+      priority,
+      metadata: {
+        event: 'PRODUCT_VIOLATION_WARNING',
+        productId: product.id,
+        productSlug: product.slug,
+        productStatus: product.status,
+        violationType,
+        issuedByAdminId: request.user.id,
+      },
+    },
+  });
+
+  return response.status(201).json({
+    message: `Warning sent to ${product.seller.email}`,
+    notificationId: notification.id,
+  });
+});
+
+/**
  * GET /api/products/search
- * 
- * Legacy search endpoint - searches products by title or description
- * Note: This is a simple contains search, for advanced search use /api/search
- * 
- * @param {Request} request - Express request with query parameter
- * @param {Response} response - Express response object
+ * Public - search products
  */
 const searchProducts = asyncHandler(async (request, response) => {
   const { query } = request.query;
   
-  if (!query) {
-    throw new AppError("Query parameter is required", 400);
-  }
+  if (!query) throw new AppError("Query parameter is required", 400);
 
-  // Search in title and description fields (removed mode: "insensitive" - not supported in MySQL)
+  // Limit query length to prevent abuse
+  const sanitizedQuery = String(query).slice(0, 100);
+
   const products = await prisma.product.findMany({
     where: {
+      status: 'PUBLISHED',
+      ...activeSellerFilter(),
       OR: [
-        {
-          title: {
-            contains: query,
-          },
-        },
-        {
-          description: {
-            contains: query,
-          },
-        },
+        { title: { contains: sanitizedQuery } },
+        { description: { contains: sanitizedQuery } },
+        { manufacturer: { contains: sanitizedQuery } },
       ],
+    },
+    take: 50, // Limit results
+    include: {
+      category: { select: { name: true } },
+      seller: { select: { id: true, shopName: true } },
     },
   });
 
@@ -591,32 +548,26 @@ const searchProducts = asyncHandler(async (request, response) => {
 
 /**
  * GET /api/products/:id
- * 
- * Retrieves a single product by ID with its category
- * 
- * @param {Request} request - Express request with product ID
- * @param {Response} response - Express response object
+ * Public - get product by ID
  */
 const getProductById = asyncHandler(async (request, response) => {
   const { id } = request.params;
   
-  if (!id) {
-    throw new AppError("Product ID is required", 400);
-  }
+  if (!id) throw new AppError("Product ID is required", 400);
 
-  // Find product by ID
-  const product = await prisma.product.findUnique({
+  const product = await prisma.product.findFirst({
     where: {
-      id: id,
+      id,
+      status: 'PUBLISHED',
+      ...activeSellerFilter(),
     },
     include: {
       category: true,
+      seller: { select: { id: true, shopName: true } },
     },
   });
   
-  if (!product) {
-    throw new AppError("Product not found", 404);
-  }
+  if (!product) throw new AppError("Product not found", 404);
   
   return response.status(200).json(product);
 });
@@ -630,6 +581,8 @@ module.exports = {
   createProduct,
   updateProduct,
   deleteProduct,
+  getModerationProduct,
+  sendProductViolationWarning,
   searchProducts,
   getProductById,
-};``
+};

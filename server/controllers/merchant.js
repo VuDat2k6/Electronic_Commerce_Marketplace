@@ -12,7 +12,7 @@
  * @module controllers/merchant
  */
 
-const prisma = require("../utills/db");
+const prisma = require("../utils/db");
 
 /**
  * GET /api/merchants

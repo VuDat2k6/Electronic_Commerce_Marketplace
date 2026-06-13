@@ -7,6 +7,7 @@
  * - File uploads and image management
  * - Rate limiting and request logging
  * - CORS configuration for frontend access
+ * - Security headers via Helmet.js
  * 
  * @module app
  * @version 1.0.0
@@ -17,6 +18,7 @@
 // ============================================================
 
 const express = require("express");
+const http = require("http");
 const path = require('path');
 
 // Load environment variables from .env files
@@ -25,12 +27,13 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 // bcryptjs - Library for hashing passwords securely
-// Used for user authentication and password storage
 const bcrypt = require('bcryptjs');
 
 // express-fileupload - Middleware for handling file uploads
-// Supports multipart/form-data for image uploads
 const fileUpload = require("express-fileupload");
+
+// helmet - HTTP security headers
+const helmet = require("helmet");
 
 // ============================================================
 // ROUTES IMPORTS
@@ -85,6 +88,8 @@ const reviewRouter = require('./routes/review');
 
 // Voucher routes - Discount coupons and promotions
 const voucherRouter = require('./routes/voucher');
+const chatRouter = require('./routes/chat');
+const { initializeChatSocket } = require('./services/chatSocket');
 
 /**
  * Seller Orders API - DEPRECATED, use /api/seller/orders instead
@@ -119,13 +124,14 @@ const {
   userManagementLimiter,
   uploadLimiter,
   searchLimiter,
-  orderLimiter
+  orderLimiter,
+  chatLimiter
 } = require('./middleware/rateLimiter');
 
 // Error handling utility - Centralized error processing
 const {
   handleServerError
-} = require('./utills/errorHandler');
+} = require('./utils/errorHandler');
 
 // ============================================================
 // EXPRESS APP INITIALIZATION
@@ -136,41 +142,6 @@ const app = express();
 // ============================================================
 // CORE MIDDLEWARE SETUP
 // These middleware run on every request
-// ============================================================
-
-/**
- * Trust proxy - Enables accurate client IP detection
- * Required when server is behind a reverse proxy (e.g., Nginx, load balancer)
- */
-app.set('trust proxy', 1);
-
-/**
- * Add unique request ID to each request
- * Used for request tracing and debugging
- */
-app.use(addRequestId);
-
-/**
- * Security logging - Checks for suspicious request patterns
- * Detects potential attacks like SQL injection, XSS attempts
- */
-app.use(securityLogger);
-
-/**
- * Request logging - Records all HTTP requests
- * Captures method, URL, status code, response time
- */
-app.use(requestLogger);
-
-/**
- * Error logging - Records 4xx and 5xx responses
- * Helps identify client errors and server issues
- */
-app.use(errorLogger);
-
-// ============================================================
-// CORS CONFIGURATION
-// Controls which origins can access the API
 // ============================================================
 
 /**
@@ -205,15 +176,78 @@ const corsOptions = {
     if (process.env.NODE_ENV === 'development' && origin.startsWith('http://localhost:')) {
       return callback(null, true);
     }
-    
+
     // Reject unauthorized origins
     const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
     return callback(new Error(msg), false);
   },
-  methods: ["GET", "POST", "PUT", "DELETE"],  // Allowed HTTP methods
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],  // Allowed HTTP methods
   allowedHeaders: ["Content-Type", "Authorization"],  // Allowed headers
   credentials: true, // Allow cookies and authorization headers
 };
+
+/**
+ * CORS middleware - Enables cross-origin requests
+ * Must be placed BEFORE rate limiters and security headers so OPTIONS requests are instantly fulfilled
+ */
+app.use(cors(corsOptions));
+
+/**
+ * Trust proxy - Enables accurate client IP detection
+ * Required when server is behind a reverse proxy (e.g., Nginx, load balancer)
+ */
+app.set('trust proxy', 1);
+
+/**
+ * Helmet.js - Security headers
+ * Sets various HTTP headers for security:
+ * - X-Content-Type-Options: nosniff
+ * - X-Frame-Options: SAMEORIGIN
+ * - X-XSS-Protection: 1; mode=block
+ * - Strict-Transport-Security (HSTS)
+ * - Referrer-Policy
+ * - Content-Security-Policy (configured below)
+ */
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+
+/**
+ * Add unique request ID to each request
+ * Used for request tracing and debugging
+ */
+app.use(addRequestId);
+
+/**
+ * Security logging - Checks for suspicious request patterns
+ * Detects potential attacks like SQL injection, XSS attempts
+ */
+app.use(securityLogger);
+
+/**
+ * Request logging - Records all HTTP requests
+ * Captures method, URL, status code, response time
+ */
+app.use(requestLogger);
+
+/**
+ * Error logging - Records 4xx and 5xx responses
+ * Helps identify client errors and server issues
+ */
+app.use(errorLogger);
 
 // ============================================================
 // BODY PARSING AND FILE UPLOADS
@@ -230,11 +264,6 @@ app.use(generalLimiter);
  * Necessary for API requests with JSON payload
  */
 app.use(express.json());
-
-/**
- * CORS middleware - Enables cross-origin requests
- */
-app.use(cors(corsOptions));
 
 /**
  * File upload middleware - Enables multipart/form-data parsing
@@ -254,7 +283,7 @@ app.use("/api/order-product", orderLimiter);       // Order items
 app.use("/api/images", uploadLimiter);             // Image uploads
 app.use("/api/main-image", uploadLimiter);         // Main image uploads
 app.use("/api/bulk-upload", uploadLimiter);        // CSV bulk imports
-app.use("/api/seller", uploadLimiter);             // Seller bulk uploads
+app.use("/api/chat", chatLimiter);
 
 /**
  * Auth limiter - Stricter limits for authentication endpoints
@@ -374,6 +403,7 @@ app.use("/api/reviews", reviewRouter);
  * Path: /api/vouchers
  */
 app.use("/api/vouchers", voucherRouter);
+app.use("/api/chat", chatRouter);
 
 /**
  * Seller Orders API - DEPRECATED, use /api/seller/orders instead
@@ -410,13 +440,13 @@ app.get('/health', (req, res) => {
  */
 app.get('/rate-limit-info', (req, res) => {
   res.status(200).json({
-    general: '300 requests per 15 minutes',
-    auth: '300 login attempts per 15 minutes',
-    register: '20 registrations per hour',
-    upload: '300 uploads per 15 minutes',
-    search: '300 searches per minute',
-    orders: '300 order operations per 15 minutes',
-    users: '300 requests per 15 minutes',
+    general: '100 requests per 15 minutes',
+    auth: '5 login attempts per 15 minutes (STRICT)',
+    register: '10 registrations per hour',
+    upload: '20 uploads per 15 minutes',
+    search: '30 searches per minute',
+    orders: '30 order operations per 15 minutes',
+    users: '50 requests per 15 minutes',
     requestId: req.reqId
   });
 });
@@ -449,12 +479,14 @@ app.use((err, req, res, next) => {
 // ============================================================
 
 const PORT = process.env.PORT || 5000;
+const httpServer = http.createServer(app);
+initializeChatSocket(httpServer);
 
 /**
  * Start the Express server
  * Logs startup information to console
  */
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log('Rate limiting and request logging enabled for all endpoints');
   console.log('Logs are being written to server/logs/ directory');

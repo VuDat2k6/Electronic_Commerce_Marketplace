@@ -1,26 +1,30 @@
-// Home page - REDESIGNED with Purple-Cyan theme
-// Using server component for better performance
+// Home page - Premium design with smooth animations
+import dynamic from "next/dynamic";
+import CategoriesGrid from "@/components/CategoriesGrid";
+import ProductsSectionWrapper from "@/components/ProductsSectionWrapper";
+import Incentives from "@/components/Incentives";
+import HeroSliderSkeleton from "@/components/HeroSliderSkeleton";
 
-import { Hero, CategoryMenu, Incentives, IntroducingSection, Newsletter } from "@/components";
-import { ProductsSectionWrapper } from "@/components/ProductsSectionWrapper";
+// Lazy load HeroSlider with skeleton fallback
+const HeroSlider = dynamic(
+  () => import("@/components/HeroSlider"),
+  {
+    loading: () => <HeroSliderSkeleton />,
+    ssr: true,
+  }
+);
 
 /**
- * Renders the redesigned Purple-Cyan themed home page composed of the hero, category menu, products section wrapper, introducing section, incentives, and newsletter.
- *
- * @returns The React element tree for the home page.
+ * Renders the home page: hero slider, category grid, products section, and incentives.
+ * Footer is rendered globally via layout.tsx; do NOT add it here.
  */
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Hero Section - Using separate Hero component */}
-      <Hero />
-
-      {/* Existing Components */}
-      <CategoryMenu />
+    <div className="min-h-screen bg-white">
+      <HeroSlider />
+      <CategoriesGrid />
       <ProductsSectionWrapper />
-      <IntroducingSection />
       <Incentives />
-      <Newsletter />
     </div>
   );
 }

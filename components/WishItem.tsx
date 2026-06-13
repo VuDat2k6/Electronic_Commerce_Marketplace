@@ -1,6 +1,14 @@
+// WishItem - Clean, modern design
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
+import { Trash2, ShoppingCart } from "lucide-react";
+import { motion } from "framer-motion";
+import { useProductStore } from "@/app/_zustand/store";
+import toast from "react-hot-toast";
+import { useState } from "react";
+import { useSession } from "next-auth/react";
 
 interface WishItemProps {
   id: string;
@@ -21,48 +29,77 @@ export default function WishItem({
   stockAvailabillity,
   onRemove,
 }: WishItemProps) {
+  const [isAdding, setIsAdding] = useState(false);
+  const addToCart = useProductStore((state) => state.addToCart);
+  const isOutOfStock = !stockAvailabillity || stockAvailabillity <= 0;
+  const { data: session } = useSession();
+
+  const handleAddToCart = () => {
+    if (isOutOfStock) return;
+    if (!session?.user) {
+      toast.error("Please login to add to cart");
+      return;
+    }
+    setIsAdding(true);
+    addToCart({
+      id,
+      title,
+      price,
+      image,
+      amount: 1,
+      slug,
+    });
+    toast.success("Added to cart!");
+    setTimeout(() => setIsAdding(false), 500);
+  };
+
   return (
-    <tr>
-      <td>-</td>
-      <td>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img 
-          src={image || "/product_placeholder.jpg"} 
-          alt={title || "Product"} 
-          className="w-14 h-14 object-cover mx-auto rounded" 
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-100 hover:shadow-md transition-shadow"
+    >
+      {/* Image */}
+      <Link href={`/product/${slug || id}`} className="flex-shrink-0">
+        <Image
+          width={80}
+          height={80}
+          src={image || "/product_placeholder.jpg"}
+          alt={title || "Product"}
+          className="w-20 h-20 rounded-xl object-cover"
         />
-      </td>
-      <td className="text-left">
-        <Link href={`/product/${slug || id}`} className="hover:text-blue-600">
-          {title || "Unknown Product"}
+      </Link>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <Link href={`/product/${slug || id}`}>
+          <h3 className="font-medium text-gray-900 hover:text-blue-600 line-clamp-2">{title}</h3>
         </Link>
-      </td>
-      <td>
-        {stockAvailabillity !== undefined && stockAvailabillity > 0 ? (
-          <span className="text-green-600">In stock</span>
-        ) : (
-          <span className="text-red-600">Out of stock</span>
-        )}
-      </td>
-      <td>${((price || 0) / 100).toFixed(2)}</td>
-      <td>
-        <div className="flex gap-2 justify-center">
-          <Link 
-            href={`/product/${slug || id}`} 
-            className="btn btn-sm btn-primary"
+        <p className="font-bold text-gray-900 mt-1">{(price || 0).toLocaleString('vi-VN')}₫</p>
+        <p className={`text-xs mt-1 ${isOutOfStock ? "text-red-500" : "text-green-600"}`}>
+          {isOutOfStock ? "Out of stock" : "In stock"}
+        </p>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleAddToCart}
+          disabled={isOutOfStock || isAdding}
+          className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-full hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+        >
+          <ShoppingCart className="w-4 h-4" />
+          {isAdding ? "Adding..." : "Add"}
+        </button>
+        {onRemove && (
+          <button
+            onClick={onRemove}
+            className="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
           >
-            View
-          </Link>
-          {onRemove && (
-            <button
-              onClick={onRemove}
-              className="btn btn-sm btn-error btn-outline"
-            >
-              Remove
-            </button>
-          )}
-        </div>
-      </td>
-    </tr>
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </motion.div>
   );
 }

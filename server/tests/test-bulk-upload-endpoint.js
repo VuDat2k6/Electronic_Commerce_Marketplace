@@ -44,7 +44,7 @@ async function testBulkUploadEndpoint() {
     console.log("   Creating a test CSV file...");
 
     const testCsv = `title,price,manufacturer,inStock,mainImage,description,slug,categoryId
-Test Product,99.99,Test Brand,10,https://example.com/test.jpg,Test description,test-product-${Date.now()},electronics`;
+Test Product,999000,Test Brand,10,https://example.com/test.jpg,Test description,test-product-${Date.now()},electronics`;
 
     fs.writeFileSync(csvPath, testCsv, "utf8");
     console.log("✅ Test CSV created");

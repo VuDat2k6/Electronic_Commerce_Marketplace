@@ -13,6 +13,7 @@ import React from "react";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
+import Image from "next/image";
 import Link from "next/link";
 
 function SimpleSlider() {
@@ -27,7 +28,7 @@ function SimpleSlider() {
     <div className="slider-container max-w-screen-2xl mx-auto px-16 max-md:px-7">
       <Slider {...settings}>
         <div className="h-[500px] max-lg:h-[400px] max-md:h-[250px] max-[500px]:h-[200px] max-[400px]:h-[150px] relative">
-          <div className="absolute left-[50%] translate-x-[-50%] translate-y-[30%] h-full text-center max-lg:translate-y-[25%] max-md:translate-y-[20%] max-sm:hidden">
+          <div className="absolute z-10 left-[50%] translate-x-[-50%] translate-y-[30%] h-full text-center max-lg:translate-y-[25%] max-md:translate-y-[20%] max-sm:hidden">
             <p className="text-xl font-light underline underline-offset-4 mb-5 max-[1162px]:text-lg max-lg:mb-2 max-md:text-base max-md:mb-1">
               Headphones
             </p>
@@ -42,10 +43,17 @@ function SimpleSlider() {
               Shop now
             </Link>
           </div>
-          <img src="/slider image 1.webp" alt="slider 1" className="h-full" />
+          <Image
+            src="/slider image 1.webp"
+            alt="Premium headphones promotion"
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
+          />
         </div>
         <div className="h-[500px] max-lg:h-[400px] max-md:h-[250px] max-[500px]:h-[200px] max-[400px]:h-[150px] relative">
-          <div className="absolute left-[50%] translate-x-[-50%] translate-y-[30%] h-full text-center max-lg:translate-y-[25%] max-md:translate-y-[20%] max-sm:hidden">
+          <div className="absolute z-10 left-[50%] translate-x-[-50%] translate-y-[30%] h-full text-center max-lg:translate-y-[25%] max-md:translate-y-[20%] max-sm:hidden">
             <p className="text-xl font-light underline underline-offset-4 mb-5 max-[1162px]:text-lg max-lg:mb-2 max-md:text-base max-md:mb-1">
               Earbud
             </p>
@@ -59,7 +67,13 @@ function SimpleSlider() {
               Shop now
             </Link>
           </div>
-          <img src="/slider image 2.webp" alt="slider 1" className="h-full" />
+          <Image
+            src="/slider image 2.webp"
+            alt="Wireless earbuds promotion"
+            fill
+            sizes="100vw"
+            className="object-cover"
+          />
         </div>
       </Slider>
     </div>

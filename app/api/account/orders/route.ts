@@ -1,25 +1,15 @@
 import { NextResponse } from "next/server";
 import { listCustomerOrders } from "@/server/services/order.service";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/authOptions";
 
-function resolveCustomerId(request: Request): string {
-  const headerCustomerId = request.headers.get("x-customer-id");
-  if (headerCustomerId && headerCustomerId.trim()) {
-    return headerCustomerId.trim();
-  }
-
-  const fallbackCustomerId = process.env.NEXT_PUBLIC_DEV_CUSTOMER_ID;
-  if (fallbackCustomerId && fallbackCustomerId.trim()) {
-    return fallbackCustomerId.trim();
-  }
-
-  return "";
-}
-
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const customerId = resolveCustomerId(request);
+    const session = await getServerSession(authOptions) as any;
+    const customerId = session?.user?.id;
+
     if (!customerId) {
-      return NextResponse.json({ error: "customerId is required" }, { status: 400 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const result = await listCustomerOrders(customerId);

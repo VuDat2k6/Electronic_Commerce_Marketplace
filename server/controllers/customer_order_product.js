@@ -1,5 +1,5 @@
-const prisma = require('../utills/db');
-const { asyncHandler, AppError } = require("../utills/errorHandler");
+const prisma = require('../utils/db');
+const { asyncHandler, AppError } = require("../utils/errorHandler");
 
 const createOrderProduct = asyncHandler(async (request, response) => {
   const { subOrderId, productId, quantity } = request.body;
@@ -286,7 +286,7 @@ const getAllProductOrders = asyncHandler(async (request, response) => {
           phone: true,
           email: true,
           company: true,
-          adress: true,
+          address: true,
           apartment: true,
           postalCode: true,
           dateTime: true,

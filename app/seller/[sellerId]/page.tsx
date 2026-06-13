@@ -6,6 +6,7 @@ import Link from "next/link";
 import apiClient from "@/lib/api";
 import { useProductStore } from "@/app/_zustand/store";
 import toast from "react-hot-toast";
+import { useSession } from "next-auth/react";
 
 interface Seller {
   id: string;
@@ -35,6 +36,7 @@ const SellerShopPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { addToCart } = useProductStore();
+  const { data: session } = useSession();
 
   useEffect(() => {
     const fetchSeller = async () => {
@@ -63,6 +65,11 @@ const SellerShopPage = () => {
   }, [sellerId]);
 
   const handleAddToCart = (product: Product) => {
+    if (!session?.user) {
+      toast.error("Please login to add to cart");
+      return;
+    }
+
     addToCart({
       id: product.id,
       title: product.title,

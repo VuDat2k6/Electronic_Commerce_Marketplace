@@ -1,20 +1,37 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-import { Breadcrumb, Filters, Pagination, Products, SortBy } from "@/components";
+import { Breadcrumb, Filters, MobileFilters, Pagination, Products, SortBy } from "@/components";
 import React from "react";
 import { sanitize } from "@/lib/sanitize";
 import { Package } from "lucide-react";
 import apiClient from "@/lib/api";
+import StorefrontLoadError from "@/components/StorefrontLoadError";
 
 const improveCategoryText = (text: string): string => {
-  if (text.indexOf("-") !== -1) {
-    let textArray = text.split("-");
-    return textArray.join(" ");
-  } else {
-    return text;
-  }
+  const normalized = text.indexOf("-") !== -1 ? text.split("-").join(" ") : text;
+  return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
 };
+
+const categorySlugToName: Record<string, string> = {
+  smartphones: "Smartphones",
+  "smart-phones": "Smartphones",
+  laptops: "Laptops",
+  tablets: "Tablets",
+  audio: "Audio",
+  earbuds: "Audio",
+  headphones: "Audio",
+  cameras: "Cameras",
+  "smart-watches": "Smart Watches",
+  watches: "Smart Watches",
+  gaming: "Gaming",
+  accessories: "Accessories",
+  mouses: "Accessories",
+  computers: "Computers",
+  printers: "Printers",
+};
+
+const getCategoryName = (slug: string) => categorySlugToName[slug] || improveCategoryText(slug);
 
 interface Product {
   id: string;
@@ -36,47 +53,59 @@ const ShopPage = async ({ params, searchParams }: {
 }) => {
   const awaitedParams = await params;
   const awaitedSearchParams = await searchParams;
+  const getSearchParam = (value: string | string[] | undefined) =>
+    Array.isArray(value) ? value[0] : value;
+  const categorySlug =
+    getSearchParam(awaitedSearchParams?.category) ||
+    (awaitedParams?.slug && awaitedParams?.slug[0]?.length > 0 ? awaitedParams.slug[0] : "");
   
-  const categoryName = awaitedParams?.slug && awaitedParams?.slug[0]?.length > 0
-    ? sanitize(improveCategoryText(awaitedParams?.slug[0]))
+  const categoryName = categorySlug
+    ? sanitize(getCategoryName(categorySlug))
     : "All Products";
   
   // Fetch products server-side
   let products: Product[] = [];
   let isLoading = true;
+  let loadFailed = false;
+  let loadErrorStatus: number | undefined;
   
   try {
-    const getSearchParam = (value: string | string[] | undefined) =>
-      Array.isArray(value) ? value[0] : value;
-
     const inStockNum = getSearchParam(awaitedSearchParams?.inStock) === "true" ? 1 : 0;
     const outOfStockNum = getSearchParam(awaitedSearchParams?.outOfStock) === "true" ? 1 : 0;
     const page = getSearchParam(awaitedSearchParams?.page)
       ? Number(getSearchParam(awaitedSearchParams?.page))
       : 1;
 
-    let stockMode = "lte";
-    if (inStockNum === 1) stockMode = "equals";
-    if (outOfStockNum === 1) stockMode = "lt";
-    if ((inStockNum === 1 && outOfStockNum === 1) || (inStockNum === 0 && outOfStockNum === 0)) stockMode = "lte";
+    let stockFilter = "";
+    if (inStockNum === 1 && outOfStockNum === 0) {
+      stockFilter = "&filters[inStock][$gt]=0";
+    }
+    if (inStockNum === 0 && outOfStockNum === 1) {
+      stockFilter = "&filters[inStock][$equals]=0";
+    }
 
     const categoryFilter =
-      awaitedParams?.slug?.length && awaitedParams.slug.length > 0
-        ? `&filters[category][$equals]=${encodeURIComponent(awaitedParams.slug[0])}`
+      categorySlug
+        ? `&filters[category][$equals]=${encodeURIComponent(categoryName)}`
         : "";
 
-    const price = getSearchParam(awaitedSearchParams?.price) || 3000;
+    const price = getSearchParam(awaitedSearchParams?.price) || 80000000;
     const rating = Number(getSearchParam(awaitedSearchParams?.rating)) || 0;
     const sort = getSearchParam(awaitedSearchParams?.sort) || "";
 
-    const apiUrl = `/api/products?filters[price][$lte]=${price}&filters[rating][$gte]=${rating}&filters[inStock][$${stockMode}]=1${categoryFilter}&sort=${sort}&page=${page}`;
+    const apiUrl = `/api/products?filters[price][$lte]=${price}&filters[rating][$gte]=${rating}${stockFilter}${categoryFilter}&sort=${sort}&page=${page}`;
     const data = await apiClient.get(apiUrl);
 
     if (data.ok) {
       const result = await data.json();
       products = Array.isArray(result) ? result : [];
+    } else {
+      loadFailed = true;
+      loadErrorStatus = data.status;
+      console.error("Failed to fetch products:", data.status);
     }
   } catch (error) {
+    loadFailed = true;
     console.error("Error fetching products:", error);
   } finally {
     isLoading = false;
@@ -114,17 +143,11 @@ const ShopPage = async ({ params, searchParams }: {
                     {categoryName}
                   </h1>
                   <p className="text-sm text-zinc-500 mt-1">
-                    {isLoading ? "Loading..." : `${products.length} products`}
+                    {isLoading ? "Loading..." : loadFailed ? "Products unavailable" : `${products.length} products`}
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
-                  {/* Mobile Filter Button */}
-                  <button className="lg:hidden inline-flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 rounded-xl text-sm font-medium hover:bg-purple-100 transition-colors">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                    </svg>
-                    Filters
-                  </button>
+                  <MobileFilters />
                   <SortBy />
                 </div>
               </div>
@@ -132,13 +155,19 @@ const ShopPage = async ({ params, searchParams }: {
 
             {/* Products Grid */}
             <div className="bg-white rounded-2xl border border-zinc-200/60 shadow-sm p-6">
-              <Products products={products} isLoading={isLoading} />
+              {loadFailed ? (
+                <StorefrontLoadError resource="products" status={loadErrorStatus} />
+              ) : (
+                <Products products={products} isLoading={isLoading} />
+              )}
             </div>
 
             {/* Pagination */}
-            <div className="mt-6">
-              <Pagination />
-            </div>
+            {!loadFailed && (
+              <div className="mt-6">
+                <Pagination />
+              </div>
+            )}
           </main>
         </div>
       </div>

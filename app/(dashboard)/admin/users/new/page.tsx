@@ -1,140 +1,141 @@
 "use client";
-import { DashboardSidebar } from "@/components";
-import { isValidEmailAddressFormat } from "@/lib/utils";
-import React, { useState } from "react";
-import toast from "react-hot-toast";
-import { sanitizeFormData } from "@/lib/form-sanitize";
 
-const DashboardCreateNewUser = () => {
-  const [userInput, setUserInput] = useState<{
-    email: string;
-    password: string;
-    role: string;
-  }>({
+import { DashboardSidebar } from "@/components";
+import { sanitizeFormData } from "@/lib/form-sanitize";
+import apiClient from "@/lib/api";
+import { isValidEmailAddressFormat } from "@/lib/utils";
+import { ArrowLeft, Info, Loader2, UserPlus } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState, type ReactNode } from "react";
+import toast from "react-hot-toast";
+
+type CreatableRole = "buyer" | "seller";
+
+export default function DashboardCreateNewUser() {
+  const router = useRouter();
+  const [userInput, setUserInput] = useState<{ email: string; password: string; role: CreatableRole }>({
     email: "",
     password: "",
-    role: "user",
+    role: "buyer",
   });
+  const [saving, setSaving] = useState(false);
 
   const addNewUser = async () => {
-    if (userInput.email === "" || userInput.password === "") {
-      toast.error("You must enter all input values to add a user");
+    if (!isValidEmailAddressFormat(userInput.email)) {
+      toast.error("Enter a valid email address");
+      return;
+    }
+    if (userInput.password.length < 8) {
+      toast.error("Password must be at least 8 characters");
       return;
     }
 
-    // Sanitize form data before sending to API
-    const sanitizedUserInput = sanitizeFormData(userInput);
-
-    if (
-      userInput.email.length > 3 &&
-      userInput.role.length > 0 &&
-      userInput.password.length > 0
-    ) {
-      if (!isValidEmailAddressFormat(userInput.email)) {
-        toast.error("You entered invalid email address format");
-        return;
+    setSaving(true);
+    try {
+      const response = await apiClient.post("/api/users", sanitizeFormData(userInput));
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "Unable to create account");
       }
 
-      if (userInput.password.length > 7) {
-        const requestOptions: any = {
-          method: "post",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(sanitizedUserInput),
-        };
-
-        try {
-          const response = await fetch(`/api/users`, requestOptions);
-
-          if (response.status === 201) {
-            await response.json();
-
-            toast.success("User added successfully");
-            setUserInput({
-              email: "",
-              password: "",
-              role: "user",
-            });
-          } else {
-            throw Error("Error while creating user");
-          }
-        } catch (error) {
-          toast.error("Error while creating user");
-        }
-      } else {
-        toast.error("Password must be longer than 7 characters");
-      }
-    } else {
-      toast.error("You must enter all input values to add a user");
+      toast.success("User added successfully");
+      router.push("/admin/users");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to create account");
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <div className="bg-white flex justify-start max-w-screen-2xl mx-auto xl:h-full max-xl:flex-col max-xl:gap-y-5">
+    <div className="mx-auto flex min-h-screen max-w-screen-2xl flex-col bg-gray-50 xl:flex-row">
       <DashboardSidebar />
-      <div className="flex flex-col gap-y-7 xl:pl-5 max-xl:px-5 w-full">
-        <h1 className="text-3xl font-semibold">Add new user</h1>
-        <div>
-          <label className="form-control w-full max-w-xs">
-            <div className="label">
-              <span className="label-text">Email:</span>
-            </div>
-            <input
-              type="email"
-              className="input input-bordered w-full max-w-xs"
-              value={userInput.email}
-              onChange={(e) =>
-                setUserInput({ ...userInput, email: e.target.value })
-              }
-            />
-          </label>
+      <main className="flex-1 px-4 py-6 sm:px-6 lg:p-8">
+        <Link href="/admin/users" className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-purple-700">
+          <ArrowLeft className="h-4 w-4" />
+          Back to users
+        </Link>
+        <div className="mb-7">
+          <p className="mb-2 text-xs font-semibold uppercase text-purple-600">Platform Access</p>
+          <h1 className="text-2xl font-bold text-gray-900 lg:text-3xl">Add user</h1>
+          <p className="mt-1 text-sm text-gray-500">Create a buyer or seller account for marketplace access.</p>
         </div>
 
-        <div>
-          <label className="form-control w-full max-w-xs">
-            <div className="label">
-              <span className="label-text">Password:</span>
+        <div className="max-w-2xl overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-5">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-50 text-purple-700">
+              <UserPlus className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="font-semibold text-gray-900">Account details</h2>
+              <p className="text-sm text-gray-500">Login credentials and marketplace role.</p>
             </div>
-            <input
-              type="password"
-              className="input input-bordered w-full max-w-xs"
-              value={userInput.password}
-              onChange={(e) =>
-                setUserInput({ ...userInput, password: e.target.value })
-              }
-            />
-          </label>
-        </div>
-
-        <div>
-          <label className="form-control w-full max-w-xs">
-            <div className="label">
-              <span className="label-text">User role: </span>
+          </div>
+          <div className="space-y-5 p-6">
+            <Field label="Email address">
+              <input
+                type="email"
+                autoComplete="email"
+                value={userInput.email}
+                onChange={(event) => setUserInput({ ...userInput, email: event.target.value })}
+                placeholder="customer@example.com"
+                className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none transition focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+              />
+            </Field>
+            <Field label="Temporary password" hint="Minimum 8 characters">
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={userInput.password}
+                onChange={(event) => setUserInput({ ...userInput, password: event.target.value })}
+                className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none transition focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+              />
+            </Field>
+            <Field label="Account role">
+              <select
+                value={userInput.role}
+                onChange={(event) => setUserInput({ ...userInput, role: event.target.value as CreatableRole })}
+                className="h-11 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none transition focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+              >
+                <option value="buyer">Buyer</option>
+                <option value="seller">Seller</option>
+              </select>
+            </Field>
+            <div className="flex gap-2 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              <Info className="mt-0.5 h-4 w-4 shrink-0" />
+              Administrator roles can only be granted by updating an existing account under controlled access.
             </div>
-            <select
-              className="select select-bordered"
-              value={userInput.role}
-              onChange={(e) =>
-                setUserInput({ ...userInput, role: e.target.value })
-              }
+          </div>
+          <div className="flex justify-end gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
+            <Link href="/admin/users" className="inline-flex h-11 items-center rounded-lg border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+              Cancel
+            </Link>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={addNewUser}
+              className="inline-flex h-11 items-center gap-2 rounded-lg bg-purple-600 px-5 text-sm font-semibold text-white transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <option value="admin">admin</option>
-              <option value="user">user</option>
-            </select>
-          </label>
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Create account
+            </button>
+          </div>
         </div>
-
-        <div className="flex gap-x-2">
-          <button
-            type="button"
-            className="uppercase bg-blue-500 px-10 py-5 text-lg border border-black border-gray-300 font-bold text-white shadow-sm hover:bg-blue-600 hover:text-white focus:outline-none focus:ring-2"
-            onClick={addNewUser}
-          >
-            Create user
-          </button>
-        </div>
-      </div>
+      </main>
     </div>
   );
-};
+}
 
-export default DashboardCreateNewUser;
+function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-2 flex items-center justify-between text-sm font-medium text-gray-700">
+        {label}
+        {hint && <span className="font-normal text-gray-400">{hint}</span>}
+      </span>
+      {children}
+    </label>
+  );
+}

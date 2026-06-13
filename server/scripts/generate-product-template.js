@@ -33,7 +33,7 @@ async function generateProductTemplate() {
     const products = [
       {
         title: "Samsung Galaxy S24 Ultra",
-        price: 1299.99,
+        price: 31990000,
         manufacturer: "Samsung",
         inStock: 25,
         mainImage:
@@ -45,7 +45,7 @@ async function generateProductTemplate() {
       },
       {
         title: "Apple MacBook Pro 16-inch",
-        price: 2499.99,
+        price: 62990000,
         manufacturer: "Apple",
         inStock: 15,
         mainImage:
@@ -58,7 +58,7 @@ async function generateProductTemplate() {
       },
       {
         title: "Sony WH-1000XM5 Headphones",
-        price: 399.99,
+        price: 8990000,
         manufacturer: "Sony",
         inStock: 50,
         mainImage:
@@ -71,7 +71,7 @@ async function generateProductTemplate() {
       },
       {
         title: "LG OLED C3 55-inch TV",
-        price: 1799.99,
+        price: 32990000,
         manufacturer: "LG",
         inStock: 10,
         mainImage:
@@ -84,7 +84,7 @@ async function generateProductTemplate() {
       },
       {
         title: "Canon EOS R6 Mark II Camera",
-        price: 2499.99,
+        price: 64990000,
         manufacturer: "Canon",
         inStock: 8,
         mainImage:
@@ -145,9 +145,9 @@ async function generateProductTemplate() {
     console.log("🚀 Next steps:");
     console.log("   1. Open the generated CSV file");
     console.log("   2. Modify the products as needed");
-    console.log("   3. Upload via Admin Dashboard > Bulk Upload");
+    console.log("   3. Upload via Seller Dashboard > Bulk Upload");
     console.log(
-      "   4. Or use the API: POST http://localhost:3001/api/products/bulk-upload\n"
+      "   4. Or use the API: POST http://localhost:5000/api/bulk-upload\n"
     );
 
     // Also create a blank template
