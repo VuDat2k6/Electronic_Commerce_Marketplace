@@ -9,7 +9,7 @@ export function clearBackendTokenCache() {
   backendTokenCache = null;
 }
 
-async function getBackendToken() {
+export async function getBackendToken() {
   if (typeof window === 'undefined') return null;
   if (backendTokenCache && backendTokenCache.expiresAt > Date.now() + 30_000) {
     return backendTokenCache.token;

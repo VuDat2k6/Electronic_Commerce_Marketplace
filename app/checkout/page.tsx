@@ -2,7 +2,7 @@
 import { SectionTitle } from "@/components";
 import { useProductStore } from "@/app/_zustand/store";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
@@ -21,7 +21,7 @@ type AppliedVoucher = {
 
 const CheckoutPage = () => {
   const { data: session, status } = useSession();
-  const [paymentMethod, setPaymentMethod] = useState<"COD" | "BANK_TRANSFER" | "CARD">("BANK_TRANSFER");
+  const [paymentMethod, setPaymentMethod] = useState<"COD" | "BANK_TRANSFER" | "CARD" | "VNPAY">("BANK_TRANSFER");
   const [checkoutForm, setCheckoutForm] = useState({
     name: "",
     lastname: "",
@@ -42,8 +42,9 @@ const CheckoutPage = () => {
   const [appliedVoucher, setAppliedVoucher] = useState<AppliedVoucher | null>(null);
   const [voucherError, setVoucherError] = useState("");
   const [isApplyingVoucher, setIsApplyingVoucher] = useState(false);
-  const { products, total, clearCart } = useProductStore();
+  const { products, total, clearCart, setCart } = useProductStore();
   const router = useRouter();
+  const idempotencyKey = useRef(crypto.randomUUID());
 
   const shippingAmount = 50000;
   const taxAmount = Math.round(total * 0.05);
@@ -122,7 +123,10 @@ const CheckoutPage = () => {
             sellerId: product.sellerId || product.merchantId,
           })),
         }),
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey.current,
+        },
       });
 
       if (!response.ok) {
@@ -234,6 +238,18 @@ const CheckoutPage = () => {
       const data = await response.json();
       const orderId = data?.order?.orderId;
 
+      if (paymentMethod === "VNPAY") {
+        if (!data?.paymentUrl) {
+          toast.error("VNPay payment URL was not created");
+          return;
+        }
+        setHasPlacedOrder(true);
+        removeVoucher();
+        clearCart();
+        window.location.assign(data.paymentUrl);
+        return;
+      }
+
       setCheckoutForm({
         name: "", lastname: "", phone: "", email: "",
         company: "", address: "", apartment: "", city: "",
@@ -265,10 +281,38 @@ const CheckoutPage = () => {
     }
     if (hasPlacedOrder) return;
     if (products.length === 0) {
-      toast.error("Your cart is empty");
-      router.push("/cart");
+      let cancelled = false;
+
+      const verifyPersistedCart = async () => {
+        try {
+          const response = await fetch("/api/account/cart", { cache: "no-store" });
+          if (!response.ok) throw new Error("Unable to load cart");
+
+          const data = await response.json();
+          const items = Array.isArray(data.items) ? data.items : [];
+
+          if (cancelled) return;
+          if (items.length > 0) {
+            setCart(items);
+            return;
+          }
+        } catch (error) {
+          console.warn("Unable to verify checkout cart", error);
+        }
+
+        if (!cancelled) {
+          toast.error("Your cart is empty");
+          router.push("/cart");
+        }
+      };
+
+      verifyPersistedCart();
+
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [hasPlacedOrder, session, status, products.length, router]);
+  }, [hasPlacedOrder, session, status, products.length, router, setCart]);
 
   useEffect(() => {
     setAppliedVoucher(null);
@@ -404,15 +448,26 @@ const CheckoutPage = () => {
                 <h2 className="text-lg font-semibold text-gray-800">Payment Method</h2>
               </div>
               <div className="p-6 space-y-4">
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {[
+                    {
+                      value: "VNPAY",
+                      label: "VNPay",
+                      icon: CreditCard,
+                      description:
+                        process.env.NEXT_PUBLIC_VNPAY_ENABLED === "true"
+                          ? "Secure online payment"
+                          : "Not configured",
+                    },
                     { value: "BANK_TRANSFER", label: "Bank QR", icon: Banknote, description: "Scan and transfer" },
                     { value: "COD", label: "Cash on Delivery", icon: WalletCards, description: "Pay when delivered" },
                     { value: "CARD", label: "Card", icon: CreditCard, description: "Coming soon" },
                   ].map((method) => {
                     const Icon = method.icon;
                     const isSelected = paymentMethod === method.value;
-                    const isDisabled = method.value === "CARD";
+                    const isDisabled =
+                      method.value === "CARD" ||
+                      (method.value === "VNPAY" && process.env.NEXT_PUBLIC_VNPAY_ENABLED !== "true");
 
                     return (
                       <button
@@ -449,6 +504,12 @@ const CheckoutPage = () => {
                     Pay the delivery partner when your order arrives. Orders remain pending until seller confirmation.
                   </div>
                 )}
+
+                {paymentMethod === "VNPAY" && (
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
+                    You will be redirected to VNPay to complete the payment securely.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -459,7 +520,11 @@ const CheckoutPage = () => {
               className="w-full py-4 text-lg"
               rightIcon={<ArrowRight className="w-5 h-5" />}
             >
-              {paymentMethod === "BANK_TRANSFER" ? "Create Order & Pay by QR" : "Place Order"}
+              {paymentMethod === "VNPAY"
+                ? "Continue to VNPay"
+                : paymentMethod === "BANK_TRANSFER"
+                  ? "Create Order & Pay by QR"
+                  : "Place Order"}
             </Button>
           </div>
 

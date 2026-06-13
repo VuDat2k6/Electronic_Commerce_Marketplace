@@ -82,10 +82,13 @@ enum NotificationPriority {
 // ============================================================
 
 model User {
-  id       String   @id @default(uuid())
-  email    String   @unique
-  password String?
-  role     UserRole @default(buyer)
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String?
+  name          String?
+  image         String?   @db.Text
+  emailVerified DateTime?
+  role          UserRole  @default(buyer)
 
   // Shop information (for sellers)
   shopName        String?
@@ -95,22 +98,44 @@ model User {
   shopStatus      ShopStatus @default(PENDING)
   shopApprovedAt  DateTime?
   shopCreatedAt   DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
   // Relations
   products          Product[]
-  buyerOrders       Customer_order[] @relation("BuyerOrders")
+  buyerOrders       Customer_order[]    @relation("BuyerOrders")
   sellerOrderItems  Order_item[]
   cartItems         CartItem[]
   Wishlist          Wishlist[]
   notifications     Notification[]
   bulkUploadBatches bulk_upload_batch[] @relation("UserBatches")
-  reviews          Review[] @relation("UserReviews")
+  reviews           Review[]            @relation("UserReviews")
+  authAccounts      AuthAccount[]
 
   @@index([role])
   @@index([shopStatus])
   @@index([email])
+}
+
+model AuthAccount {
+  id                String   @id @default(uuid())
+  userId            String
+  provider          String
+  providerAccountId String
+  type              String
+  accessToken       String?  @db.Text
+  refreshToken      String?  @db.Text
+  expiresAt         Int?
+  tokenType         String?
+  scope             String?  @db.Text
+  idToken           String?  @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
 }
 
 // ============================================================
@@ -118,30 +143,30 @@ model User {
 // ============================================================
 
 model Product {
-  id           String       @id @default(uuid())
-  slug         String       @unique
+  id           String        @id @default(uuid())
+  slug         String        @unique
   title        String
   mainImage    String
-  price        Int          @default(0) // Price in cents
-  rating       Int          @default(0)
+  price        Int           @default(0) // Price in cents
+  rating       Int           @default(0)
   description  String
   manufacturer String
-  inStock      Int         @default(0)
+  inStock      Int           @default(0)
   status       ProductStatus @default(DRAFT)
   categoryId   String
   sellerId     String
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   // Relations
-  category        Category          @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  seller          User              @relation(fields: [sellerId], references: [id])
-  cartItems       CartItem[]
-  orderItems      Order_item[]
-  Wishlist        Wishlist[]
-  reviews         Review[]
+  category         Category           @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  seller           User               @relation(fields: [sellerId], references: [id])
+  cartItems        CartItem[]
+  orderItems       Order_item[]
+  Wishlist         Wishlist[]
+  reviews          Review[]
   subOrderProducts SubOrderProduct[]
-  bulkUploadItems bulk_upload_item[] @relation("ProductBulkItems")
+  bulkUploadItems  bulk_upload_item[] @relation("ProductBulkItems")
 
   @@index([categoryId])
   @@index([sellerId])
@@ -173,31 +198,32 @@ model Image {
 // ============================================================
 
 model Customer_order {
-  id         String      @id @default(uuid())
-  buyerId    String?
-  
+  id             String  @id @default(uuid())
+  buyerId        String?
+  idempotencyKey String? @unique
+
   // Shipping information
-  name        String
-  lastname    String
-  phone       String
-  email       String
-  company     String?
-  address     String // Fixed: was "adress"
-  apartment   String?
-  postalCode  String
-  city        String
-  country     String
-  
+  name       String
+  lastname   String
+  phone      String
+  email      String
+  company    String?
+  address    String // Fixed: was "adress"
+  apartment  String?
+  postalCode String
+  city       String
+  country    String
+
   // Order details
   orderNotice String?
   dateTime    DateTime    @default(now())
   status      OrderStatus @default(processing)
-  total       Int         // Total in cents
+  total       Int // Total in cents
 
   // Relations
-  buyer    User?         @relation("BuyerOrders", fields: [buyerId], references: [id])
-  items    Order_item[]
-  payments Payment[]
+  buyer     User?        @relation("BuyerOrders", fields: [buyerId], references: [id])
+  items     Order_item[]
+  payments  Payment[]
   subOrders SubOrder[]
 
   @@index([email])
@@ -235,16 +261,42 @@ model Order_item {
 // ============================================================
 
 model Payment {
-  id        String          @id @default(uuid())
-  orderId   String
-  customer_order Customer_order @relation(fields: [orderId], references: [id])
-  status    String          @default("PENDING") // PENDING, COMPLETED, FAILED
-  method    String?         // CARD, BANK_TRANSFER, COD
-  amount    Int             @default(0)
-  paidAt    DateTime?
+  id                   String         @id @default(uuid())
+  orderId              String
+  customer_order       Customer_order @relation(fields: [orderId], references: [id])
+  events               PaymentEvent[]
+  status               String         @default("PENDING") // PENDING, COMPLETED, FAILED
+  method               String? // CARD, BANK_TRANSFER, COD, VNPAY
+  provider             String         @default("INTERNAL")
+  amount               Int            @default(0)
+  transactionRef       String?        @unique
+  gatewayTransactionNo String?        @unique
+  responseCode         String?
+  bankCode             String?
+  cardType             String?
+  rawResponse          Json?
+  expiresAt            DateTime?
+  paidAt               DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @default(now()) @updatedAt
 
   @@index([orderId])
   @@index([status])
+  @@index([provider, status])
+}
+
+model PaymentEvent {
+  id        String   @id @default(uuid())
+  paymentId String
+  eventKey  String   @unique
+  eventType String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([createdAt])
 }
 
 // ============================================================
@@ -297,16 +349,16 @@ model CartItem {
 // ============================================================
 
 model Merchant {
-  id           String  @id @default(uuid())
-  name         String
-  description  String?
-  email        String?
-  phone        String?
-  address      String?
-  status       String  @default("ACTIVE")
-  shippingFee  Int     @default(0)
-  avatar       String?
-  banner       String?
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  email       String?
+  phone       String?
+  address     String?
+  status      String  @default("ACTIVE")
+  shippingFee Int     @default(0)
+  avatar      String?
+  banner      String?
 
   vouchers Voucher[]
 
@@ -321,22 +373,22 @@ model Merchant {
 // ============================================================
 
 model Voucher {
-  id             String    @id @default(uuid())
-  code           String    @unique
-  title          String
-  description    String?
-  discountType   String    // PERCENTAGE, FIXED
-  discountValue  Int       // Percentage (1-100) or amount (cents)
-  merchantId     String?
-  merchant       Merchant? @relation(fields: [merchantId], references: [id])
-  minOrderValue  Int?
-  maxDiscount    Int?
-  usageLimit     Int?
-  usedCount      Int       @default(0)
-  perUserLimit   Int       @default(1)
-  startsAt       DateTime  @default(now())
-  expiresAt      DateTime
-  isActive       Boolean   @default(true)
+  id            String    @id @default(uuid())
+  code          String    @unique
+  title         String
+  description   String?
+  discountType  String // PERCENTAGE, FIXED
+  discountValue Int // Percentage (1-100) or amount (cents)
+  merchantId    String?
+  merchant      Merchant? @relation(fields: [merchantId], references: [id])
+  minOrderValue Int?
+  maxDiscount   Int?
+  usageLimit    Int?
+  usedCount     Int       @default(0)
+  perUserLimit  Int       @default(1)
+  startsAt      DateTime  @default(now())
+  expiresAt     DateTime
+  isActive      Boolean   @default(true)
 
   usages VoucherUsage[]
 
@@ -368,17 +420,17 @@ model VoucherUsage {
 
 model Review {
   id         String   @id @default(uuid())
-  rating     Int      // 1-5 stars
+  rating     Int // 1-5 stars
   comment    String?
-  productId String
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation("UserReviews", fields: [userId], references: [id])
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation("UserReviews", fields: [userId], references: [id])
   merchantId String
-  orderId   String?
-  status    String   @default("PUBLISHED")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  orderId    String?
+  status     String   @default("PUBLISHED")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([productId])
   @@index([merchantId])
@@ -391,20 +443,20 @@ model Review {
 // ============================================================
 
 model SubOrder {
-  id              String   @id @default(uuid())
-  parentOrderId   String
-  parentOrder     Customer_order @relation(fields: [parentOrderId], references: [id], onDelete: Cascade)
-  merchantId      String
-  status          String   @default("PENDING")
-  subTotal        Int      @default(0)
-  shippingTotal   Int      @default(0)
-  trackingNumber  String?
+  id               String         @id @default(uuid())
+  parentOrderId    String
+  parentOrder      Customer_order @relation(fields: [parentOrderId], references: [id], onDelete: Cascade)
+  merchantId       String
+  status           String         @default("PENDING")
+  subTotal         Int            @default(0)
+  shippingTotal    Int            @default(0)
+  trackingNumber   String?
   shippingProvider String?
-  shippedAt       DateTime?
-  deliveredAt     DateTime?
-  confirmedAt     DateTime?
-  cancelledAt     DateTime?
-  cancelReason    String?
+  shippedAt        DateTime?
+  deliveredAt      DateTime?
+  confirmedAt      DateTime?
+  cancelledAt      DateTime?
+  cancelReason     String?
 
   products SubOrderProduct[]
 
@@ -417,11 +469,11 @@ model SubOrder {
 }
 
 model SubOrderProduct {
-  id                    String   @id @default(uuid())
+  id                   String   @id @default(uuid())
   subOrderId           String
-  subOrder             SubOrder  @relation(fields: [subOrderId], references: [id], onDelete: Cascade)
+  subOrder             SubOrder @relation(fields: [subOrderId], references: [id], onDelete: Cascade)
   productId            String
-  product              Product   @relation(fields: [productId], references: [id])
+  product              Product  @relation(fields: [productId], references: [id])
   quantity             Int
   productNameSnapshot  String
   productImageSnapshot String?
@@ -461,12 +513,12 @@ model Notification {
 // ============================================================
 
 model bulk_upload_batch {
-  id         String           @id @default(uuid())
+  id         String             @id @default(uuid())
   fileName   String?
-  createdAt  DateTime         @default(now())
-  status     BulkUploadStatus @default(PENDING)
-  itemCount  Int              @default(0)
-  errorCount Int              @default(0)
+  createdAt  DateTime           @default(now())
+  status     BulkUploadStatus   @default(PENDING)
+  itemCount  Int                @default(0)
+  errorCount Int                @default(0)
   items      bulk_upload_item[]
 
   userId String?

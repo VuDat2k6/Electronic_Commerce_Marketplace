@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createCustomerOrder } from "../../../../server/services/order.service";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
+import { assertVnpayConfigured, createVnpayPaymentUrl } from "@/lib/vnpay";
 
 interface CheckoutRequestBody {
   name?: string;
@@ -22,12 +23,15 @@ interface CheckoutRequestBody {
     sellerId?: string;
   }>;
   voucherCodes?: string[];
-  paymentMethod?: "COD" | "BANK_TRANSFER" | "CARD";
+  paymentMethod?: "COD" | "BANK_TRANSFER" | "CARD" | "VNPAY";
 }
 
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CheckoutRequestBody;
+    if (body.paymentMethod === "VNPAY") {
+      assertVnpayConfigured();
+    }
     const session = await getServerSession(authOptions) as any;
     const customerId = session?.user?.id?.trim();
 
@@ -44,6 +48,7 @@ export async function POST(request: Request) {
 
     const order = await createCustomerOrder({
       customerId,
+      idempotencyKey: request.headers.get("idempotency-key")?.trim() || undefined,
       name: body.name,
       lastname: body.lastname,
       phone: body.phone,
@@ -60,7 +65,20 @@ export async function POST(request: Request) {
       paymentMethod: body.paymentMethod,
     });
 
-    return NextResponse.json({ order }, { status: 201 });
+    const paymentUrl =
+      body.paymentMethod === "VNPAY"
+        ? await createVnpayPaymentUrl({
+            transactionRef: order.paymentTransactionRef || order.paymentId,
+            orderId: order.orderId,
+            amount: order.total,
+            ipAddress:
+              request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+              request.headers.get("x-real-ip") ||
+              "127.0.0.1",
+          })
+        : null;
+
+    return NextResponse.json({ order, paymentUrl }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to create order";
     return NextResponse.json({ error: message }, { status: 400 });

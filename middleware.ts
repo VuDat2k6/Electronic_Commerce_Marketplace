@@ -32,7 +32,7 @@ export default withAuth(
     }
 
     // Profile routes — phải đăng nhập (bất kỳ role nào)
-    if (path.startsWith("/profile")) {
+    if (path.startsWith("/profile") || path.startsWith("/messages")) {
       if (!role) {
         return NextResponse.redirect(new URL("/login", req.url));
       }
@@ -58,6 +58,9 @@ export default withAuth(
         ) {
           return !!token;
         }
+        if (path.startsWith("/messages")) {
+          return !!token;
+        }
         return true;
       },
     },
@@ -76,5 +79,6 @@ export const config = {
     "/seller/settings",
     "/seller/bulk-upload",
     "/profile/:path*",
+    "/messages/:path*",
   ],
 };

@@ -8,6 +8,10 @@ const apiOrigin = (() => {
     }
 })();
 
+const socketOrigin = apiOrigin
+    ? apiOrigin.replace(/^http:/, "ws:").replace(/^https:/, "wss:")
+    : "";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     typescript: {
@@ -93,7 +97,7 @@ const nextConfig = {
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
                 "font-src 'self' https://fonts.gstatic.com",
                 "img-src 'self' data: blob: https:",
-                `connect-src 'self'${apiOrigin ? ` ${apiOrigin}` : ""}`,
+                `connect-src 'self'${apiOrigin ? ` ${apiOrigin}` : ""}${socketOrigin ? ` ${socketOrigin}` : ""}`,
                 "frame-ancestors 'none'",
                 "form-action 'self'",
                 "base-uri 'self'",

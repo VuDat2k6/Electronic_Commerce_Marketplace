@@ -266,7 +266,17 @@ const getSellerDashboard = asyncHandler(async (req, res) => {
       orderBy: { order: { dateTime: 'desc' } },
     }),
     prisma.subOrder.findMany({
-      where: { merchantId: sellerId },
+      where: {
+        merchantId: sellerId,
+        parentOrder: {
+          is: {
+            OR: [
+              { payments: { none: { provider: 'VNPAY' } } },
+              { payments: { some: { provider: 'VNPAY', status: 'COMPLETED' } } },
+            ],
+          },
+        },
+      },
       include: {
         parentOrder: {
           select: {
@@ -581,7 +591,17 @@ const getSellerOrders = asyncHandler(async (req, res) => {
       orderBy: { order: { dateTime: 'desc' } },
     }),
     prisma.subOrder.findMany({
-      where: { merchantId: sellerId },
+      where: {
+        merchantId: sellerId,
+        parentOrder: {
+          is: {
+            OR: [
+              { payments: { none: { provider: 'VNPAY' } } },
+              { payments: { some: { provider: 'VNPAY', status: 'COMPLETED' } } },
+            ],
+          },
+        },
+      },
       include: {
         parentOrder: {
           select: {
@@ -694,6 +714,18 @@ const updateOrderItemStatus = asyncHandler(async (req, res) => {
     });
 
     if (!subOrder) throw new AppError('Order item does not exist', 404);
+
+    const pendingVnpayPayment = await prisma.payment.findFirst({
+      where: {
+        orderId: subOrder.parentOrderId,
+        provider: 'VNPAY',
+        status: { not: 'COMPLETED' },
+      },
+      select: { id: true },
+    });
+    if (pendingVnpayPayment) {
+      throw new AppError('This order cannot be fulfilled until VNPay payment is confirmed', 409);
+    }
 
     const subOrderStatus = normalizeSubOrderStatus(status);
     if (!subOrderStatus) {

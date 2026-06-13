@@ -25,9 +25,10 @@ export interface CreateCustomerOrderInput {
   country?: string;
   orderNotice?: string;
   customerId?: string; // Logged-in user ID
+  idempotencyKey?: string;
   items: CheckoutPayloadItem[];
   voucherCodes?: string[]; // List of voucher codes
-  paymentMethod?: "COD" | "BANK_TRANSFER" | "CARD";
+  paymentMethod?: "COD" | "BANK_TRANSFER" | "CARD" | "VNPAY";
 }
 
 export interface CreateCustomerOrderResult {
@@ -37,6 +38,8 @@ export interface CreateCustomerOrderResult {
   shippingTotal: number;
   discountTotal: number;
   subOrderCount: number;
+  paymentId: string;
+  paymentTransactionRef?: string;
   message: string;
   subOrders?: SubOrderSummary[];
 }
@@ -159,9 +162,12 @@ async function createBuyerOrderNotification(
     await prisma.notification.create({
       data: {
         userId: input.customerId,
-        title: "Order confirmed",
-        message: `Your order #${orderId} has been placed successfully and is waiting for seller confirmation.`,
-        type: "ORDER_UPDATE",
+        title: input.paymentMethod === "VNPAY" ? "Payment required" : "Order confirmed",
+        message:
+          input.paymentMethod === "VNPAY"
+            ? `Your order #${orderId} is reserved while VNPay payment is pending.`
+            : `Your order #${orderId} has been placed successfully and is waiting for seller confirmation.`,
+        type: input.paymentMethod === "VNPAY" ? "PAYMENT_STATUS" : "ORDER_UPDATE",
         priority: "NORMAL",
         isRead: false,
         metadata: {
@@ -198,6 +204,34 @@ export async function createCustomerOrder(
 ): Promise<CreateCustomerOrderResult> {
   if (!input.items || input.items.length === 0) {
     throw new Error("At least one cart item is required");
+  }
+
+  if (input.customerId && input.idempotencyKey) {
+    const existingOrder = await prisma.customer_order.findFirst({
+      where: {
+        buyerId: input.customerId,
+        idempotencyKey: input.idempotencyKey,
+      },
+      include: {
+        payments: { take: 1 },
+        subOrders: true,
+      },
+    });
+
+    if (existingOrder) {
+      const payment = existingOrder.payments[0];
+      return {
+        orderId: existingOrder.id,
+        total: existingOrder.total,
+        subTotal: existingOrder.subOrders.reduce((sum, item) => sum + item.subTotal, 0),
+        shippingTotal: existingOrder.subOrders.reduce((sum, item) => sum + item.shippingTotal, 0),
+        discountTotal: 0,
+        subOrderCount: existingOrder.subOrders.length,
+        paymentId: payment?.id || "",
+        paymentTransactionRef: payment?.transactionRef || undefined,
+        message: "Existing order returned",
+      };
+    }
   }
 
   // ============================================
@@ -314,7 +348,7 @@ export async function createCustomerOrder(
     }
 
     // Group by seller (use sellerId from product)
-    const sellerId = item.sellerId || dbProduct.sellerId;
+    const sellerId = dbProduct.sellerId;
     if (!sellerGroups.has(sellerId)) {
       sellerGroups.set(sellerId, {
         items: [],
@@ -361,8 +395,22 @@ export async function createCustomerOrder(
   const finalTotal = Math.max(0, grandTotal - discountTotal + shippingTotal + taxTotal);
   const paymentMethod = input.paymentMethod || "COD";
 
-  if (!["COD", "BANK_TRANSFER", "CARD"].includes(paymentMethod)) {
+  if (!["COD", "BANK_TRANSFER", "CARD", "VNPAY"].includes(paymentMethod)) {
     throw new Error("Invalid payment method");
+  }
+
+  if (paymentMethod === "VNPAY" && input.customerId) {
+    const activeReservations = await prisma.payment.count({
+      where: {
+        provider: "VNPAY",
+        status: "PENDING",
+        expiresAt: { gt: new Date() },
+        customer_order: { is: { buyerId: input.customerId } },
+      },
+    });
+    if (activeReservations >= 3) {
+      throw new Error("Complete or wait for your pending VNPay payments before creating another order");
+    }
   }
 
   // ============================================
@@ -373,6 +421,7 @@ export async function createCustomerOrder(
     const order = await tx.customer_order.create({
       data: {
         buyerId: input.customerId || null,
+        idempotencyKey: input.idempotencyKey || null,
         name: input.name || "Customer",
         lastname: input.lastname || "Order",
         phone: input.phone || "N/A",
@@ -389,14 +438,25 @@ export async function createCustomerOrder(
       },
     });
 
-    await tx.payment.create({
+    const payment = await tx.payment.create({
       data: {
         orderId: order.id,
         method: paymentMethod,
+        provider: paymentMethod === "VNPAY" ? "VNPAY" : "INTERNAL",
         status: "PENDING",
         amount: finalTotal,
       },
     });
+
+    if (paymentMethod === "VNPAY") {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          transactionRef: payment.id.replace(/-/g, ""),
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+        },
+      });
+    }
 
     const createdSubOrders: SubOrderSummary[] = [];
 
@@ -479,10 +539,15 @@ export async function createCustomerOrder(
       }
     }
 
-    return { ...order, subOrders: createdSubOrders };
+    return {
+      ...order,
+      paymentId: payment.id,
+      paymentTransactionRef: paymentMethod === "VNPAY" ? payment.id.replace(/-/g, "") : undefined,
+      subOrders: createdSubOrders,
+    };
   });
 
-  await Promise.all([
+  const notificationTasks: Promise<unknown>[] = [
     createBuyerOrderNotification(createdOrder.id, input, {
       total: finalTotal,
       subTotal: totalSubTotal,
@@ -490,12 +555,17 @@ export async function createCustomerOrder(
       discountTotal,
       subOrderCount: sellerGroups.size,
     }),
-    createSellerNewOrderNotifications(
+  ];
+
+  if (paymentMethod !== "VNPAY") {
+    notificationTasks.push(createSellerNewOrderNotifications(
       createdOrder.id,
       getBuyerDisplayName(input),
       createdOrder.subOrders || []
-    ),
-  ]);
+    ));
+  }
+
+  await Promise.all(notificationTasks);
 
   return {
     orderId: createdOrder.id,
@@ -504,6 +574,8 @@ export async function createCustomerOrder(
     shippingTotal,
     discountTotal,
     subOrderCount: sellerGroups.size,
+    paymentId: createdOrder.paymentId,
+    paymentTransactionRef: createdOrder.paymentTransactionRef,
     message: "Order created successfully",
     subOrders: createdOrder.subOrders || [],
   };
@@ -661,6 +733,22 @@ export async function cancelCustomerOrder(
 
     if (order.payments.some((payment) => payment.status === "COMPLETED")) {
       throw new Error("Paid orders require support-assisted cancellation because refunds are not automated yet");
+    }
+
+    const pendingVnpayPayments = order.payments.filter(
+      (payment) => payment.provider === "VNPAY" && payment.status === "PENDING",
+    );
+    if (pendingVnpayPayments.length > 0) {
+      const transition = await tx.payment.updateMany({
+        where: {
+          id: { in: pendingVnpayPayments.map((payment) => payment.id) },
+          status: "PENDING",
+        },
+        data: { status: "CANCELLED" },
+      });
+      if (transition.count !== pendingVnpayPayments.length) {
+        throw new Error("Payment status changed while cancelling the order. Please refresh and try again");
+      }
     }
 
     const placedAt = order.dateTime;

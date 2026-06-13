@@ -18,6 +18,7 @@
 // ============================================================
 
 const express = require("express");
+const http = require("http");
 const path = require('path');
 
 // Load environment variables from .env files
@@ -87,6 +88,8 @@ const reviewRouter = require('./routes/review');
 
 // Voucher routes - Discount coupons and promotions
 const voucherRouter = require('./routes/voucher');
+const chatRouter = require('./routes/chat');
+const { initializeChatSocket } = require('./services/chatSocket');
 
 /**
  * Seller Orders API - DEPRECATED, use /api/seller/orders instead
@@ -121,7 +124,8 @@ const {
   userManagementLimiter,
   uploadLimiter,
   searchLimiter,
-  orderLimiter
+  orderLimiter,
+  chatLimiter
 } = require('./middleware/rateLimiter');
 
 // Error handling utility - Centralized error processing
@@ -279,6 +283,7 @@ app.use("/api/order-product", orderLimiter);       // Order items
 app.use("/api/images", uploadLimiter);             // Image uploads
 app.use("/api/main-image", uploadLimiter);         // Main image uploads
 app.use("/api/bulk-upload", uploadLimiter);        // CSV bulk imports
+app.use("/api/chat", chatLimiter);
 
 /**
  * Auth limiter - Stricter limits for authentication endpoints
@@ -398,6 +403,7 @@ app.use("/api/reviews", reviewRouter);
  * Path: /api/vouchers
  */
 app.use("/api/vouchers", voucherRouter);
+app.use("/api/chat", chatRouter);
 
 /**
  * Seller Orders API - DEPRECATED, use /api/seller/orders instead
@@ -473,12 +479,14 @@ app.use((err, req, res, next) => {
 // ============================================================
 
 const PORT = process.env.PORT || 5000;
+const httpServer = http.createServer(app);
+initializeChatSocket(httpServer);
 
 /**
  * Start the Express server
  * Logs startup information to console
  */
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log('Rate limiting and request logging enabled for all endpoints');
   console.log('Logs are being written to server/logs/ directory');

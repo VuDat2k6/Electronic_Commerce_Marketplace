@@ -85,7 +85,17 @@ const getSellerAnalytics = asyncHandler(async (req, res) => {
       orderBy: { order: { dateTime: 'desc' } },
     }),
     prisma.subOrder.findMany({
-      where: { merchantId: sellerId },
+      where: {
+        merchantId: sellerId,
+        parentOrder: {
+          is: {
+            OR: [
+              { payments: { none: { provider: 'VNPAY' } } },
+              { payments: { some: { provider: 'VNPAY', status: 'COMPLETED' } } },
+            ],
+          },
+        },
+      },
       include: {
         parentOrder: {
           select: {

@@ -260,6 +260,21 @@ const orderLimiter = rateLimit({
   }
 });
 
+const chatLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipPreflightRequests,
+  handler: (req, res) => {
+    res.status(429).json({
+      error: 'Too many chat requests, please try again later.',
+      code: 'CHAT_RATE_LIMIT_EXCEEDED',
+      retryAfter: '1 minute'
+    });
+  }
+});
+
 // ============================================================
 // EXPORTS
 // ============================================================
@@ -271,7 +286,8 @@ module.exports = {
   userManagementLimiter,  // User API protection (50/15min)
   uploadLimiter,         // Upload protection (20/15min)
   searchLimiter,         // Search protection (30/1min)
-  orderLimiter           // Order protection (30/15min)
+  orderLimiter,          // Order protection (30/15min)
+  chatLimiter
 };
 
 /**

@@ -9,6 +9,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  MessageCircle,
   PackageCheck,
   Phone,
   Search,
@@ -311,6 +312,9 @@ export function Header() {
                       <AccountLink href="/notifications" icon={Bell} onClick={() => setTimeout(() => setIsAccountOpen(false), 150)}>
                         Notifications
                       </AccountLink>
+                      <AccountLink href="/messages" icon={MessageCircle} onClick={() => setTimeout(() => setIsAccountOpen(false), 150)}>
+                        Messages
+                      </AccountLink>
                       {accountRole === "buyer" && (
                         <AccountLink href="/become-seller" icon={Store} onClick={() => setTimeout(() => setIsAccountOpen(false), 150)}>
                         Become a seller
@@ -439,6 +443,14 @@ export function Header() {
                         Become a seller
                       </Link>
                     )}
+                    <Link
+                      href="/messages"
+                      onClick={() => setTimeout(() => setIsMobileMenuOpen(false), 150)}
+                      className="flex items-center justify-center gap-2 rounded-lg bg-white py-2.5 text-sm font-medium text-gray-900"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      Messages
+                    </Link>
                     <button
                       type="button"
                       onClick={() => {

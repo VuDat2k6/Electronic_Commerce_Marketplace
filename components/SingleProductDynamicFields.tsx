@@ -10,7 +10,7 @@
 
 "use client";
 import React, { useState } from "react";
-import { Heart } from "lucide-react";
+import { Heart, MessageCircle } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -62,6 +62,22 @@ const SingleProductDynamicFields = ({ product }: { product: Product }) => {
     toast.success("Product added to wishlist");
   };
 
+  const handleChat = () => {
+    if (!product.sellerId) {
+      toast.error("Seller information is unavailable");
+      return;
+    }
+    if (!session?.user) {
+      router.push(`/login?callbackUrl=${encodeURIComponent(`/product/${product.slug}`)}`);
+      return;
+    }
+    if (session.user.id === product.sellerId) {
+      toast.error("You cannot message your own shop");
+      return;
+    }
+    router.push(`/messages?recipientId=${encodeURIComponent(product.sellerId)}&productId=${encodeURIComponent(productId || "")}`);
+  };
+
   return (
     <>
       {isAvailable && (
@@ -95,6 +111,15 @@ const SingleProductDynamicFields = ({ product }: { product: Product }) => {
       >
         <Heart className={`h-5 w-5 ${isWishlisted ? "fill-current" : ""}`} />
         {isWishlisted ? "Saved to wishlist" : "Add to wishlist"}
+      </button>
+      <button
+        type="button"
+        disabled={status === "loading" || !product.sellerId}
+        onClick={handleChat}
+        className="mt-3 flex w-[425px] max-w-full items-center justify-center gap-2 rounded-xl border-2 border-purple-200 bg-purple-50 px-5 py-3 text-base font-semibold text-purple-700 transition hover:border-purple-300 hover:bg-purple-100 disabled:cursor-wait disabled:opacity-60 max-[500px]:w-full"
+      >
+        <MessageCircle className="h-5 w-5" />
+        Chat with seller
       </button>
     </>
   );

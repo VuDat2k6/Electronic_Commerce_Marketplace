@@ -1,6 +1,7 @@
 const express = require('express');
 
 const router = express.Router();
+const { authenticate, requireAdmin } = require('../middleware/auth');
 
 const {
     createOrderProduct,
@@ -10,6 +11,8 @@ const {
     getProductOrder,
     getAllProductOrders
   } = require('../controllers/customer_order_product');
+
+  router.use(authenticate, requireAdmin);
 
   router.route('/')
   .get(getAllProductOrders)

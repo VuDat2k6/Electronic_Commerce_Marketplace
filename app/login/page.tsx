@@ -2,11 +2,12 @@
 "use client";
 
 import { isValidEmailAddressFormat } from "@/lib/utils";
-import { signIn, useSession } from "next-auth/react";
+import { getProviders, signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { FcGoogle } from "react-icons/fc";
 import { motion } from "framer-motion";
 
 function resolveSafeCallbackUrl(callbackUrl: string | null) {
@@ -34,6 +35,7 @@ const LoginPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isInteractive, setIsInteractive] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
   const [formData, setFormData] = useState({ email: "", password: "" });
   const { status: sessionStatus } = useSession();
   const requestedCallbackUrl = searchParams.get("callbackUrl");
@@ -42,6 +44,9 @@ const LoginPage = () => {
 
   useEffect(() => {
     setIsInteractive(true);
+    getProviders()
+      .then((providers) => setGoogleEnabled(Boolean(providers?.google)))
+      .catch(() => setGoogleEnabled(false));
   }, []);
 
   useEffect(() => {
@@ -264,6 +269,25 @@ const LoginPage = () => {
               )}
             </motion.button>
           </form>
+
+          {googleEnabled && (
+            <>
+              <div className="my-6 flex items-center gap-3">
+                <span className="h-px flex-1 bg-gray-200" />
+                <span className="text-xs font-medium uppercase text-gray-400">or</span>
+                <span className="h-px flex-1 bg-gray-200" />
+              </div>
+              <button
+                type="button"
+                disabled={controlsDisabled}
+                onClick={() => signIn("google", { callbackUrl: redirectTo })}
+                className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FcGoogle className="h-5 w-5" />
+                Continue with Google
+              </button>
+            </>
+          )}
 
           {/* Sign up link */}
           <p className="mt-6 text-center text-sm text-gray-600">

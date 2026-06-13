@@ -34,7 +34,11 @@ const { authenticate, requireAdmin, authenticateOptional } = require('../middlew
  * Authenticated users can create orders
  * Order total is calculated server-side
  */
-router.post('/', createCustomerOrder);
+router.post('/', authenticate, (req, res) => {
+  res.status(410).json({
+    error: 'Legacy order creation is disabled. Use the canonical checkout endpoint.',
+  });
+});
 
 // ============================================================
 // ADMIN ONLY ROUTES
@@ -70,6 +74,6 @@ router.delete('/:id', authenticate, requireAdmin, deleteCustomerOrder);
  * Get a single order by ID
  * Authenticated user (own orders) or Admin
  */
-router.get('/:id', authenticate, getCustomerOrder);
+router.get('/:id', authenticate, requireAdmin, getCustomerOrder);
 
 module.exports = router;
